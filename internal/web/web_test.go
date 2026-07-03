@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -234,6 +235,104 @@ func TestEntriesFilterByParentIncludesChildren(t *testing.T) {
 	}
 	if !strings.Contains(body, "EngD/Thesis") {
 		t.Errorf("entries table should display full project path")
+	}
+}
+
+func TestNewEntryFormShowsSpanControls(t *testing.T) {
+	_, h := testServer(t)
+	body := get(t, h, "/entries/new").Body.String()
+	if !strings.Contains(body, `name="end"`) || !strings.Contains(body, `name="weekdays_only"`) {
+		t.Errorf("new entry form should offer a repeat-until end date and weekdays-only toggle: %s", body)
+	}
+}
+
+func TestEditEntryFormHidesSpanControls(t *testing.T) {
+	s, h := testServer(t)
+	e := addEntry(t, s, "EngD", "draft", "2026-07-01", 30, store.KindLogged, "")
+	body := get(t, h, fmt.Sprintf("/entries/%d/edit", e.ID)).Body.String()
+	if strings.Contains(body, `name="end"`) {
+		t.Errorf("edit entry form should not offer span controls: %s", body)
+	}
+}
+
+func TestCreateActivityViaFormGroupsEntries(t *testing.T) {
+	s, h := testServer(t)
+	// Mon 2026-07-06 through Fri 2026-07-10.
+	rec := postForm(t, h, "/entries", url.Values{
+		"project": {"EngD"}, "subject": {"conference"}, "date": {"2026-07-06"},
+		"start": {"09:00"}, "duration": {"8h"}, "kind": {"planned"}, "tags": {"#travel"},
+		"end": {"2026-07-10"}, "weekdays_only": {"1"},
+	})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST /entries (activity) = %d: %s", rec.Code, rec.Body.String())
+	}
+	entries, _ := s.Entries(store.Filter{})
+	if len(entries) != 5 {
+		t.Fatalf("want 5 grouped entries, got %d", len(entries))
+	}
+	activityID := entries[0].ActivityID
+	if activityID == 0 {
+		t.Fatal("entries should share a non-zero activity id")
+	}
+	for _, e := range entries {
+		if e.ActivityID != activityID {
+			t.Errorf("entry %d: activity id %d, want %d", e.ID, e.ActivityID, activityID)
+		}
+	}
+
+	body := get(t, h, "/entries").Body.String()
+	if !strings.Contains(body, fmt.Sprintf("/activities/%d", activityID)) {
+		t.Errorf("entries list should link grouped rows to their activity: %s", body)
+	}
+}
+
+func TestActivityPageShowsAndUpdatesGroup(t *testing.T) {
+	s, h := testServer(t)
+	entries, err := s.AddActivity(store.NewEntry{
+		Project: "EngD", Subject: "conference", Date: "2026-07-06", Start: "09:00",
+		Minutes: 480, Kind: store.KindPlanned, Tags: "#travel",
+	}, "2026-07-08", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := entries[0].ActivityID
+
+	body := get(t, h, fmt.Sprintf("/activities/%d", id)).Body.String()
+	if !strings.Contains(body, "conference") || !strings.Contains(body, "2026-07-06") {
+		t.Errorf("activity page should show subject and dates: %s", body)
+	}
+
+	rec := postForm(t, h, fmt.Sprintf("/activities/%d", id), url.Values{
+		"project": {"EngD"}, "subject": {"offsite"}, "duration": {"4h"}, "kind": {"planned"},
+	})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST /activities/%d = %d: %s", id, rec.Code, rec.Body.String())
+	}
+	members, err := s.ActivityEntries(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range members {
+		if m.Subject != "offsite" || m.Blocks != 8 {
+			t.Errorf("member not updated: %+v", m)
+		}
+	}
+
+	if rec := postForm(t, h, fmt.Sprintf("/activities/%d/confirm", id), nil); rec.Code != http.StatusSeeOther {
+		t.Fatalf("confirm = %d", rec.Code)
+	}
+	members, _ = s.ActivityEntries(id)
+	for _, m := range members {
+		if m.Kind != store.KindLogged {
+			t.Errorf("member %d not confirmed: %s", m.ID, m.Kind)
+		}
+	}
+
+	if rec := postForm(t, h, fmt.Sprintf("/activities/%d/delete", id), nil); rec.Code != http.StatusSeeOther {
+		t.Fatalf("delete = %d", rec.Code)
+	}
+	if remaining, _ := s.Entries(store.Filter{}); len(remaining) != 0 {
+		t.Errorf("want no entries left after activity delete, got %d", len(remaining))
 	}
 }
 

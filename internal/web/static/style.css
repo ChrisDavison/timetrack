@@ -131,6 +131,10 @@ button.danger { color: var(--over); }
 .entry-form .row { display: flex; gap: 0.6rem; }
 .entry-form .row > label { flex: 1; }
 .entry-form input, .entry-form select, .entry-form textarea { width: 100%; }
+.entry-form .duration-presets { gap: 0.4rem; margin-top: -0.35rem; }
+.entry-form .duration-presets button { padding: 0.2rem 0.6rem; font-size: 0.8rem; }
+.entry-form .checkbox-field { flex-direction: row; align-items: center; gap: 0.4rem; align-self: end; padding-bottom: 0.4rem; }
+.entry-form .checkbox-field input { width: auto; }
 
 /* --- timer --- */
 .timer-live { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; }

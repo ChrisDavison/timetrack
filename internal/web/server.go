@@ -53,6 +53,10 @@ func NewServer(s *store.Store, capacityDay float64) http.Handler {
 	mux.HandleFunc("POST /entries/{id}", srv.entryUpdate)
 	mux.HandleFunc("POST /entries/{id}/delete", srv.entryDelete)
 	mux.HandleFunc("POST /entries/{id}/confirm", srv.entryConfirm)
+	mux.HandleFunc("GET /activities/{id}", srv.activityShow)
+	mux.HandleFunc("POST /activities/{id}", srv.activityUpdate)
+	mux.HandleFunc("POST /activities/{id}/delete", srv.activityDelete)
+	mux.HandleFunc("POST /activities/{id}/confirm", srv.activityConfirm)
 	mux.HandleFunc("GET /calendar", srv.calendar)
 	mux.HandleFunc("GET /projects", srv.projects)
 	mux.HandleFunc("POST /projects", srv.projectCreate)
@@ -287,31 +291,36 @@ func (s *server) entries(w http.ResponseWriter, r *http.Request) {
 }
 
 type entryForm struct {
-	Action   string
-	Title    string
-	Active   string
-	Error    string
-	Project  string
-	Subject  string
-	Notes    string
-	Date     string
-	Start    string
-	Duration string
-	Kind     string
-	Tags     string
-	Projects []store.Project
+	Action       string
+	Title        string
+	Active       string
+	Error        string
+	Project      string
+	Subject      string
+	Notes        string
+	Date         string
+	Start        string
+	Duration     string
+	Kind         string
+	Tags         string
+	End          string // repeat-until date; only used when AllowSpan
+	WeekdaysOnly bool
+	AllowSpan    bool // show the repeat-until/weekdays-only controls (new entries only)
+	Projects     []store.Project
 }
 
 func (s *server) formFromRequest(r *http.Request) (store.NewEntry, entryForm, error) {
 	form := entryForm{
-		Project:  r.FormValue("project"),
-		Subject:  r.FormValue("subject"),
-		Notes:    r.FormValue("notes"),
-		Date:     r.FormValue("date"),
-		Start:    r.FormValue("start"),
-		Duration: r.FormValue("duration"),
-		Kind:     r.FormValue("kind"),
-		Tags:     r.FormValue("tags"),
+		Project:      r.FormValue("project"),
+		Subject:      r.FormValue("subject"),
+		Notes:        r.FormValue("notes"),
+		Date:         r.FormValue("date"),
+		Start:        r.FormValue("start"),
+		Duration:     r.FormValue("duration"),
+		Kind:         r.FormValue("kind"),
+		Tags:         r.FormValue("tags"),
+		End:          r.FormValue("end"),
+		WeekdaysOnly: r.FormValue("weekdays_only") != "",
 	}
 	minutes := 0
 	if form.Duration != "" {
@@ -344,7 +353,7 @@ func (s *server) entryNew(w http.ResponseWriter, r *http.Request) {
 	form := entryForm{
 		Action: "/entries", Title: "New entry",
 		Date: q.Get("date"), Start: q.Get("start"),
-		Duration: "30m", Kind: "logged",
+		Duration: "30m", Kind: "logged", AllowSpan: true,
 	}
 	if form.Date == "" {
 		form.Date = today()
@@ -357,9 +366,13 @@ func (s *server) entryNew(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) entryCreate(w http.ResponseWriter, r *http.Request) {
 	newEntry, form, err := s.formFromRequest(r)
-	form.Action, form.Title = "/entries", "New entry"
+	form.Action, form.Title, form.AllowSpan = "/entries", "New entry", true
 	if err == nil {
-		_, err = s.store.AddEntry(newEntry)
+		if form.End != "" && form.End != form.Date {
+			_, err = s.store.AddActivity(newEntry, form.End, form.WeekdaysOnly)
+		} else {
+			_, err = s.store.AddEntry(newEntry)
+		}
 	}
 	if err != nil {
 		form.Error = err.Error()

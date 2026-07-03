@@ -26,13 +26,31 @@
       <input type="time" name="start" value="{{.Start}}" step="1800" required>
     </label>
     <label class="field">duration
-      <input name="duration" value="{{.Duration}}" list="durations" required placeholder="1.5h">
+      <input id="duration-input" name="duration" value="{{.Duration}}" list="durations" required placeholder="1.5h">
       <datalist id="durations">
         <option value="30m"><option value="1h"><option value="1.5h"><option value="2h">
         <option value="3h"><option value="4h"><option value="6h"><option value="8h">
       </datalist>
     </label>
   </div>
+  <div class="row duration-presets">
+    <button type="button" class="quiet" onclick="document.getElementById('duration-input').value = '30m'">30m</button>
+    <button type="button" class="quiet" onclick="document.getElementById('duration-input').value = '1h'">1h</button>
+    <button type="button" class="quiet" onclick="document.getElementById('duration-input').value = '3h'">3h</button>
+    <button type="button" class="quiet" onclick="document.getElementById('duration-input').value = '8h'">8h</button>
+  </div>
+  {{if .AllowSpan}}
+  <div class="row">
+    <label class="field">repeat until (optional)
+      <input type="date" name="end" value="{{.End}}" min="{{.Date}}"
+             title="fills in one entry per day from date to here, e.g. for a holiday or trip">
+    </label>
+    <label class="field checkbox-field">
+      <input type="checkbox" name="weekdays_only" value="1" {{if .WeekdaysOnly}}checked{{end}}>
+      weekdays only
+    </label>
+  </div>
+  {{end}}
   <label class="field">tags
     <input name="tags" value="{{.Tags}}" placeholder="#research #implementation">
   </label>
