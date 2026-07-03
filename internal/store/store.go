@@ -104,6 +104,7 @@ type Project struct {
 	Name       string // own segment name, without the parent prefix
 	Color      string
 	Archived   bool
+	System     bool   // permanent project (e.g. "Holiday"); cannot be archived or deleted
 	ParentID   int64  // 0 for top-level projects
 	ParentName string // "" for top-level projects
 }
@@ -174,12 +175,12 @@ func (s *Store) CreateProject(name, color string) (Project, error) {
 }
 
 const projectSelect = `
-	SELECT p.id, p.name, p.color, p.archived, COALESCE(p.parent_id, 0), COALESCE(pp.name, '')
+	SELECT p.id, p.name, p.color, p.archived, p.system, COALESCE(p.parent_id, 0), COALESCE(pp.name, '')
 	FROM projects p LEFT JOIN projects pp ON pp.id = p.parent_id`
 
 func scanProject(row interface{ Scan(...any) error }) (Project, error) {
 	var p Project
-	err := row.Scan(&p.ID, &p.Name, &p.Color, &p.Archived, &p.ParentID, &p.ParentName)
+	err := row.Scan(&p.ID, &p.Name, &p.Color, &p.Archived, &p.System, &p.ParentID, &p.ParentName)
 	return p, err
 }
 
@@ -241,6 +242,9 @@ func (s *Store) UpdateProject(p Project) error {
 	if strings.Contains(p.Name, "/") {
 		return fmt.Errorf("project name may not contain '/'")
 	}
+	if p.System && p.Archived {
+		return fmt.Errorf("%q is a system project and cannot be archived", p.Name)
+	}
 	_, err := s.db.Exec(`UPDATE projects SET name = ?, color = ?, archived = ? WHERE id = ?`,
 		p.Name, p.Color, p.Archived, p.ID)
 	if err != nil {
@@ -253,8 +257,16 @@ func (s *Store) UpdateProject(p Project) error {
 }
 
 // DeleteProject removes a project. It refuses when the project still has
-// time entries or sub-projects; archive such projects instead.
+// time entries or sub-projects; archive such projects instead. System
+// projects (e.g. "Holiday") can never be deleted.
 func (s *Store) DeleteProject(id int64) error {
+	p, err := s.ProjectByID(id)
+	if err != nil {
+		return err
+	}
+	if p.System {
+		return fmt.Errorf("%q is a system project and cannot be deleted", p.Name)
+	}
 	var entryCount int
 	if err := s.db.QueryRow(`SELECT count(*) FROM entries WHERE project_id = ?`, id).Scan(&entryCount); err != nil {
 		return err
@@ -269,7 +281,7 @@ func (s *Store) DeleteProject(id int64) error {
 	if childCount > 0 {
 		return fmt.Errorf("project has sub-projects; delete or move them first")
 	}
-	_, err := s.db.Exec(`DELETE FROM projects WHERE id = ?`, id)
+	_, err = s.db.Exec(`DELETE FROM projects WHERE id = ?`, id)
 	return err
 }
 

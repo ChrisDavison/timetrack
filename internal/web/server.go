@@ -167,6 +167,38 @@ func (s *server) dashboard(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	projects, err := s.store.Projects(false)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	// Holiday hours don't count toward committed work; they instead reduce
+	// capacity (an 8h holiday removes 8h from the work week).
+	holidayPath := ""
+	for _, p := range projects {
+		if p.System {
+			holidayPath = p.Path()
+			break
+		}
+	}
+	var holidayTodayLogged, holidayTodayPlanned, holidayWeekLogged, holidayWeekPlanned float64
+	for _, l := range todayRep.Lines {
+		if !l.Sub && l.Key == holidayPath {
+			holidayTodayLogged, holidayTodayPlanned = l.LoggedHours, l.PlannedHours
+		}
+	}
+	for _, l := range weekRep.Lines {
+		if !l.Sub && l.Key == holidayPath {
+			holidayWeekLogged, holidayWeekPlanned = l.LoggedHours, l.PlannedHours
+		}
+	}
+	todayLogged := todayRep.TotalLogged - holidayTodayLogged
+	todayPlanned := todayRep.TotalPlanned - holidayTodayPlanned
+	weekLogged := weekRep.TotalLogged - holidayWeekLogged
+	weekPlanned := weekRep.TotalPlanned - holidayWeekPlanned
+	capacityDay := max(s.capacityDay-holidayTodayLogged-holidayTodayPlanned, 0)
+	capacityWeek := max(s.capacityDay*5-holidayWeekLogged-holidayWeekPlanned, 0)
+
 	// Bars show top-level projects only; rollup lines already include
 	// sub-project hours.
 	var bars []projectBar
@@ -180,11 +212,6 @@ func (s *server) dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	projectColors := map[string]string{}
-	projects, err := s.store.Projects(false)
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
 	for _, p := range projects {
 		projectColors[p.Path()] = p.Color
 	}
@@ -215,21 +242,20 @@ func (s *server) dashboard(w http.ResponseWriter, r *http.Request) {
 		elapsed = time.Since(running.StartedAt).Round(time.Minute)
 	}
 
-	capacityWeek := s.capacityDay * 5
 	s.render(w, http.StatusOK, "dashboard.html", map[string]any{
 		"Title":        "Dashboard",
 		"Active":       "dashboard",
 		"Date":         now.Format("Monday 2 January 2006"),
-		"TodayLogged":  todayRep.TotalLogged,
-		"TodayPlanned": todayRep.TotalPlanned,
-		"TodayTotal":   todayRep.TotalLogged + todayRep.TotalPlanned,
-		"WeekLogged":   weekRep.TotalLogged,
-		"WeekPlanned":  weekRep.TotalPlanned,
-		"WeekTotal":    weekRep.TotalLogged + weekRep.TotalPlanned,
-		"CapacityDay":  s.capacityDay,
+		"TodayLogged":  todayLogged,
+		"TodayPlanned": todayPlanned,
+		"TodayTotal":   todayLogged + todayPlanned,
+		"WeekLogged":   weekLogged,
+		"WeekPlanned":  weekPlanned,
+		"WeekTotal":    weekLogged + weekPlanned,
+		"CapacityDay":  capacityDay,
 		"CapacityWeek": capacityWeek,
-		"OverToday":    todayRep.TotalLogged+todayRep.TotalPlanned > s.capacityDay,
-		"OverWeek":     weekRep.TotalLogged+weekRep.TotalPlanned > capacityWeek,
+		"OverToday":    todayLogged+todayPlanned > capacityDay,
+		"OverWeek":     weekLogged+weekPlanned > capacityWeek,
 		"Bars":         bars,
 		"TodayEntries": todayEntries,
 		"Running":      running,

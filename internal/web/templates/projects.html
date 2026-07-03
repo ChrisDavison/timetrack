@@ -15,6 +15,7 @@
         <button class="quiet">rename</button>
       </form>
       {{if .Archived}}<span class="tag">archived</span>{{end}}
+      {{if .System}}<span class="tag">system</span>{{end}}
     </td>
     <td>
       {{if index $.HasChildren .ID}}
@@ -35,6 +36,7 @@
       </form>
     </td>
     <td>
+      {{if not .System}}
       <form class="inline" method="post" action="/projects/{{.ID}}">
         {{if .Archived}}
         <input type="hidden" name="archived" value="0"><button class="quiet">unarchive</button>
@@ -46,6 +48,7 @@
             onsubmit="return confirm('Delete project {{.Name}}? This cannot be undone.');">
         <button class="quiet">delete</button>
       </form>
+      {{end}}
     </td>
   </tr>
   {{end}}
