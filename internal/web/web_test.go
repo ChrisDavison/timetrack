@@ -185,3 +185,22 @@ func TestReportCSVDownload(t *testing.T) {
 		t.Errorf("csv body = %q", rec.Body.String())
 	}
 }
+
+func TestProjectsPageHasRenameForm(t *testing.T) {
+	_, h := testServer(t)
+	body := get(t, h, "/projects").Body.String()
+	if !strings.Contains(body, `name="name" value="EngD"`) {
+		t.Errorf("projects page should render an editable name input per project: %s", body)
+	}
+}
+
+func TestRenameProjectViaForm(t *testing.T) {
+	s, h := testServer(t)
+	rec := postForm(t, h, "/projects/1", url.Values{"name": {"EngD Thesis"}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("rename = %d", rec.Code)
+	}
+	if _, err := s.ProjectByName("EngD Thesis"); err != nil {
+		t.Errorf("project not renamed: %v", err)
+	}
+}
