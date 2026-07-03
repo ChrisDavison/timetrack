@@ -290,3 +290,40 @@ func TestFilterParentIncludesChildren(t *testing.T) {
 		t.Errorf("sub-project filter should be exact: %+v", got)
 	}
 }
+
+func TestEntryUUIDAssigned(t *testing.T) {
+	s := testStore(t)
+	mustProject(t, s, "EngD")
+	e1, _ := s.AddEntry(NewEntry{Project: "EngD", Subject: "a", Date: "2026-07-03", Start: "09:00", Minutes: 30, Kind: KindLogged})
+	e2, _ := s.AddEntry(NewEntry{Project: "EngD", Subject: "b", Date: "2026-07-03", Start: "10:00", Minutes: 30, Kind: KindLogged})
+	if len(e1.UUID) != 32 || len(e2.UUID) != 32 {
+		t.Errorf("uuids should be 32 hex chars: %q %q", e1.UUID, e2.UUID)
+	}
+	if e1.UUID == e2.UUID {
+		t.Error("uuids must be unique")
+	}
+	timer, err := s.StartTimer("EngD", "live", "", "", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(timer.UUID) != 32 {
+		t.Errorf("timer entry needs a uuid too, got %q", timer.UUID)
+	}
+}
+
+func TestUpdatedAtBumps(t *testing.T) {
+	s := testStore(t)
+	mustProject(t, s, "EngD")
+	e, _ := s.AddEntry(NewEntry{Project: "EngD", Subject: "a", Date: "2026-07-03", Start: "09:00", Minutes: 30, Kind: KindLogged})
+	if e.UpdatedAt == "" {
+		t.Fatal("updated_at should be set on create")
+	}
+	time.Sleep(2 * time.Millisecond)
+	got, err := s.UpdateEntry(e.ID, NewEntry{Project: "EngD", Subject: "b", Date: "2026-07-03", Start: "09:00", Minutes: 30, Kind: KindLogged})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !(got.UpdatedAt > e.UpdatedAt) {
+		t.Errorf("updated_at should increase on update: %q -> %q", e.UpdatedAt, got.UpdatedAt)
+	}
+}

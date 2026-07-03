@@ -24,6 +24,9 @@ commands:
   list      list entries with optional filters
   report    summarize hours by project, tag, or day
   projects  manage projects
+  merge     merge entries from another timetrack database file
+  export    write all data as JSON to stdout (or -o file)
+  import    merge a JSON export (file or - for stdin)
 
 Run 'tt <command> -h' for command flags.
 Database: $TIMETRACK_DB or ~/.local/share/timetrack/timetrack.db (-db to override).
@@ -44,6 +47,9 @@ func main() {
 		"list":     runList,
 		"report":   runReport,
 		"projects": runProjects,
+		"merge":    runMerge,
+		"export":   runExport,
+		"import":   runImport,
 	}
 	run, ok := commands[cmd]
 	if !ok {

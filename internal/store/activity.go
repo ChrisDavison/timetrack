@@ -79,9 +79,9 @@ func (s *Store) AddActivity(n NewEntry, end string, weekdaysOnly bool) ([]Entry,
 	var ids []int64
 	for _, date := range dates {
 		res, err := tx.Exec(
-			`INSERT INTO entries (project_id, subject, notes, date, start_time, duration_blocks, kind, activity_id)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			p.ID, n.Subject, n.Notes, date, start, blocks, n.Kind, activityID)
+			`INSERT INTO entries (project_id, subject, notes, date, start_time, duration_blocks, kind, activity_id, uuid, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			p.ID, n.Subject, n.Notes, date, start, blocks, n.Kind, activityID, newUUID(), nowStamp())
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +108,7 @@ func (s *Store) AddActivity(n NewEntry, end string, weekdaysOnly bool) ([]Entry,
 
 // ActivityEntries returns an activity's member entries, ordered by date.
 func (s *Store) ActivityEntries(id int64) ([]Entry, error) {
-	rows, err := s.db.Query(entrySelect+` WHERE e.activity_id = ? ORDER BY e.date, e.start_time, e.id`, id)
+	rows, err := s.db.Query(entrySelect+` WHERE e.activity_id = ? AND e.deleted = 0 ORDER BY e.date, e.start_time, e.id`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -161,8 +161,8 @@ func (s *Store) UpdateActivity(id int64, n NewEntry) error {
 
 	for _, m := range members {
 		if _, err := tx.Exec(
-			`UPDATE entries SET project_id = ?, subject = ?, notes = ?, duration_blocks = ?, kind = ? WHERE id = ?`,
-			p.ID, n.Subject, n.Notes, blocks, n.Kind, m.ID); err != nil {
+			`UPDATE entries SET project_id = ?, subject = ?, notes = ?, duration_blocks = ?, kind = ?, updated_at = ? WHERE id = ?`,
+			p.ID, n.Subject, n.Notes, blocks, n.Kind, nowStamp(), m.ID); err != nil {
 			return err
 		}
 		if err := s.setTags(tx, m.ID, tags); err != nil {
@@ -177,18 +177,19 @@ func (s *Store) ConfirmActivity(id int64) error {
 	if _, err := s.ActivityEntries(id); err != nil {
 		return err
 	}
-	_, err := s.db.Exec(`UPDATE entries SET kind = ? WHERE activity_id = ? AND kind = ?`, KindLogged, id, KindPlanned)
+	_, err := s.db.Exec(`UPDATE entries SET kind = ?, updated_at = ? WHERE activity_id = ? AND kind = ?`, KindLogged, nowStamp(), id, KindPlanned)
 	return err
 }
 
-// DeleteActivity removes every member entry and the activity itself.
+// DeleteActivity soft-deletes every member entry (tombstones, so merges to
+// other machines propagate the deletion) and removes the activity itself.
 func (s *Store) DeleteActivity(id int64) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM entries WHERE activity_id = ?`, id); err != nil {
+	if _, err := tx.Exec(`UPDATE entries SET deleted = 1, updated_at = ? WHERE activity_id = ?`, nowStamp(), id); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM activities WHERE id = ?`, id); err != nil {

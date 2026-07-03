@@ -1,12 +1,28 @@
 package store
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 )
+
+// newUUID returns 32 hex characters of randomness: the stable identity an
+// entry keeps across machines when databases are merged.
+func newUUID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		panic(err) // crypto/rand failure is unrecoverable
+	}
+	return hex.EncodeToString(b)
+}
+
+// nowStamp is the updated_at format; UTC and sub-second so last-write-wins
+// merge comparisons are fine-grained.
+func nowStamp() string { return time.Now().UTC().Format(time.RFC3339Nano) }
 
 type Kind string
 
@@ -33,7 +49,9 @@ type Entry struct {
 	Kind          Kind
 	StartedAt     time.Time // set while running
 	Tags          []string
-	ActivityID    int64 // 0 when not part of a multi-day activity group
+	ActivityID    int64  // 0 when not part of a multi-day activity group
+	UUID          string // stable identity across machines
+	UpdatedAt     string // RFC3339Nano UTC, for last-write-wins merging
 }
 
 // Hours returns the entry duration in hours.
@@ -145,9 +163,9 @@ func (s *Store) AddEntry(n NewEntry) (Entry, error) {
 		return Entry{}, err
 	}
 	res, err := s.db.Exec(
-		`INSERT INTO entries (project_id, subject, notes, date, start_time, duration_blocks, kind)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		p.ID, n.Subject, n.Notes, n.Date, start, blocksFromMinutes(n.Minutes), n.Kind)
+		`INSERT INTO entries (project_id, subject, notes, date, start_time, duration_blocks, kind, uuid, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ID, n.Subject, n.Notes, n.Date, start, blocksFromMinutes(n.Minutes), n.Kind, newUUID(), nowStamp())
 	if err != nil {
 		return Entry{}, err
 	}
@@ -171,9 +189,9 @@ func (s *Store) UpdateEntry(id int64, n NewEntry) (Entry, error) {
 		return Entry{}, err
 	}
 	_, err = s.db.Exec(
-		`UPDATE entries SET project_id = ?, subject = ?, notes = ?, date = ?, start_time = ?, duration_blocks = ?, kind = ?
+		`UPDATE entries SET project_id = ?, subject = ?, notes = ?, date = ?, start_time = ?, duration_blocks = ?, kind = ?, updated_at = ?
 		 WHERE id = ?`,
-		p.ID, n.Subject, n.Notes, n.Date, start, blocksFromMinutes(n.Minutes), n.Kind, id)
+		p.ID, n.Subject, n.Notes, n.Date, start, blocksFromMinutes(n.Minutes), n.Kind, nowStamp(), id)
 	if err != nil {
 		return Entry{}, err
 	}
@@ -183,8 +201,10 @@ func (s *Store) UpdateEntry(id int64, n NewEntry) (Entry, error) {
 	return s.Entry(id)
 }
 
+// DeleteEntry soft-deletes: the row stays as a tombstone so merges to other
+// machines propagate the deletion instead of resurrecting the entry.
 func (s *Store) DeleteEntry(id int64) error {
-	_, err := s.db.Exec(`DELETE FROM entries WHERE id = ?`, id)
+	_, err := s.db.Exec(`UPDATE entries SET deleted = 1, updated_at = ? WHERE id = ?`, nowStamp(), id)
 	return err
 }
 
@@ -217,7 +237,7 @@ func (s *Store) setTags(db execer, entryID int64, tags []string) error {
 const entrySelect = `
 	SELECT e.id, e.project_id, p.name, COALESCE(pp.name, ''), p.color, e.subject, e.notes,
 	       e.date, e.start_time, COALESCE(e.duration_blocks, 0), e.kind, COALESCE(e.started_at, ''),
-	       COALESCE(e.activity_id, 0)
+	       COALESCE(e.activity_id, 0), e.uuid, e.updated_at
 	FROM entries e
 	JOIN projects p ON p.id = e.project_id
 	LEFT JOIN projects pp ON pp.id = p.parent_id`
@@ -226,7 +246,7 @@ func scanEntry(row interface{ Scan(...any) error }) (Entry, error) {
 	var e Entry
 	var startedAt string
 	err := row.Scan(&e.ID, &e.ProjectID, &e.ProjectName, &e.ProjectParent, &e.ProjectColor, &e.Subject, &e.Notes,
-		&e.Date, &e.Start, &e.Blocks, &e.Kind, &startedAt, &e.ActivityID)
+		&e.Date, &e.Start, &e.Blocks, &e.Kind, &startedAt, &e.ActivityID, &e.UUID, &e.UpdatedAt)
 	if err != nil {
 		return Entry{}, err
 	}
@@ -237,7 +257,7 @@ func scanEntry(row interface{ Scan(...any) error }) (Entry, error) {
 }
 
 func (s *Store) Entry(id int64) (Entry, error) {
-	e, err := scanEntry(s.db.QueryRow(entrySelect+` WHERE e.id = ?`, id))
+	e, err := scanEntry(s.db.QueryRow(entrySelect+` WHERE e.id = ? AND e.deleted = 0`, id))
 	if err == sql.ErrNoRows {
 		return Entry{}, fmt.Errorf("no entry with id %d", id)
 	}
@@ -278,7 +298,7 @@ type Filter struct {
 
 func (s *Store) Entries(f Filter) ([]Entry, error) {
 	q := entrySelect
-	var conds []string
+	conds := []string{`e.deleted = 0`}
 	var args []any
 	if f.Project != "" {
 		pr, err := s.ProjectByName(f.Project)
@@ -310,9 +330,7 @@ func (s *Store) Entries(f Filter) ([]Entry, error) {
 		like := "%" + f.Search + "%"
 		args = append(args, like, like)
 	}
-	if len(conds) > 0 {
-		q += ` WHERE ` + strings.Join(conds, ` AND `)
-	}
+	q += ` WHERE ` + strings.Join(conds, ` AND `)
 	q += ` ORDER BY e.date, e.start_time, e.id`
 
 	rows, err := s.db.Query(q, args...)
@@ -353,9 +371,9 @@ func (s *Store) StartTimer(project, subject, notes, tags string, now time.Time) 
 		return Entry{}, err
 	}
 	res, err := s.db.Exec(
-		`INSERT INTO entries (project_id, subject, notes, date, start_time, duration_blocks, kind, started_at)
-		 VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`,
-		p.ID, subject, notes, now.Format("2006-01-02"), start, KindRunning, now.Format(time.RFC3339))
+		`INSERT INTO entries (project_id, subject, notes, date, start_time, duration_blocks, kind, started_at, uuid, updated_at)
+		 VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+		p.ID, subject, notes, now.Format("2006-01-02"), start, KindRunning, now.Format(time.RFC3339), newUUID(), nowStamp())
 	if err != nil {
 		if strings.Contains(err.Error(), "idx_one_running") {
 			return Entry{}, fmt.Errorf("a timer is already running; stop it first")
@@ -382,8 +400,8 @@ func (s *Store) StopTimer(now time.Time) (Entry, error) {
 	elapsed := int(now.Sub(running.StartedAt).Minutes())
 	blocks := max(blocksFromMinutes(elapsed), 1)
 	_, err = s.db.Exec(
-		`UPDATE entries SET duration_blocks = ?, kind = ?, started_at = NULL WHERE id = ?`,
-		blocks, KindLogged, running.ID)
+		`UPDATE entries SET duration_blocks = ?, kind = ?, started_at = NULL, updated_at = ? WHERE id = ?`,
+		blocks, KindLogged, nowStamp(), running.ID)
 	if err != nil {
 		return Entry{}, err
 	}
@@ -392,7 +410,7 @@ func (s *Store) StopTimer(now time.Time) (Entry, error) {
 
 // RunningEntry returns the running entry, or nil when no timer is active.
 func (s *Store) RunningEntry() (*Entry, error) {
-	e, err := scanEntry(s.db.QueryRow(entrySelect + ` WHERE e.kind = 'running'`))
+	e, err := scanEntry(s.db.QueryRow(entrySelect + ` WHERE e.kind = 'running' AND e.deleted = 0`))
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -415,7 +433,7 @@ func (s *Store) ConfirmPlanned(id int64) (Entry, error) {
 	if e.Kind != KindPlanned {
 		return Entry{}, fmt.Errorf("entry %d is %s, not planned", id, e.Kind)
 	}
-	if _, err := s.db.Exec(`UPDATE entries SET kind = ? WHERE id = ?`, KindLogged, id); err != nil {
+	if _, err := s.db.Exec(`UPDATE entries SET kind = ?, updated_at = ? WHERE id = ?`, KindLogged, nowStamp(), id); err != nil {
 		return Entry{}, err
 	}
 	return s.Entry(id)

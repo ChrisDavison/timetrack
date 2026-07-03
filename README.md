@@ -83,6 +83,33 @@ grouped into a single activity manageable from the web UI.
 The database defaults to `~/.local/share/timetrack/timetrack.db`; override with
 `TIMETRACK_DB` or `-db`. Back up by copying that one file.
 
+## Two machines
+
+Every entry carries a UUID, an edit timestamp, and (when deleted) a
+tombstone, so databases from different machines merge cleanly:
+
+```sh
+# routine sync: copy the other machine's db here, then
+scp laptop:~/.local/share/timetrack/timetrack.db /tmp/laptop.db
+tt merge /tmp/laptop.db          # then do the same in the other direction
+
+# or as portable JSON, e.g. over ssh
+tt export | ssh laptop tt import -
+tt export -o backup-2026-07-03.json
+```
+
+Merge semantics: entries the local machine has never seen are added
+(projects, sub-projects, and tags are created as needed); an entry edited on
+both machines resolves to the most recent edit (so keep clocks roughly
+sane); deletions propagate rather than resurrecting; a running timer is
+never transferred; merging the same data twice is a no-op.
+
+**Before first copying your database to a second machine, run the new
+binary once** (any command) so existing entries are assigned UUIDs — two
+databases that share pre-UUID history and migrate separately will duplicate
+those entries on merge. Project color/archive changes only transfer when a
+project is first created on the other machine.
+
 ## Development
 
 ```sh
