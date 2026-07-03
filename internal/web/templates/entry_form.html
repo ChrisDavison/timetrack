@@ -1,0 +1,47 @@
+{{template "header" .}}
+<h1>{{.Title}}</h1>
+{{if .Error}}<div class="error-box">{{.Error}}</div>{{end}}
+<form class="entry-form card" method="post" action="{{.Action}}">
+  <div class="row">
+    <label class="field">project
+      <select name="project" required>
+        {{range .Projects}}<option {{if eq .Name $.Project}}selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+    </label>
+    <label class="field">kind
+      <select name="kind">
+        <option value="logged" {{if eq .Kind "logged"}}selected{{end}}>logged (work done)</option>
+        <option value="planned" {{if eq .Kind "planned"}}selected{{end}}>planned (future allocation)</option>
+      </select>
+    </label>
+  </div>
+  <label class="field">subject
+    <input name="subject" value="{{.Subject}}" required placeholder="what did you work on?">
+  </label>
+  <div class="row">
+    <label class="field">date
+      <input type="date" name="date" value="{{.Date}}" required>
+    </label>
+    <label class="field">start
+      <input type="time" name="start" value="{{.Start}}" step="1800" required>
+    </label>
+    <label class="field">duration
+      <input name="duration" value="{{.Duration}}" list="durations" required placeholder="1.5h">
+      <datalist id="durations">
+        <option value="30m"><option value="1h"><option value="1.5h"><option value="2h">
+        <option value="3h"><option value="4h"><option value="6h"><option value="8h">
+      </datalist>
+    </label>
+  </div>
+  <label class="field">tags
+    <input name="tags" value="{{.Tags}}" placeholder="#research #implementation">
+  </label>
+  <label class="field">notes
+    <input name="notes" value="{{.Notes}}" placeholder="optional">
+  </label>
+  <div class="row">
+    <button class="primary">Save</button>
+    <a href="/entries" style="align-self: center;">cancel</a>
+  </div>
+</form>
+{{template "footer"}}

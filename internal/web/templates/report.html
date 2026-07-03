@@ -1,0 +1,54 @@
+{{template "header" .}}
+<div class="page-head">
+  <h1>Report</h1>
+  <div class="actions">
+    <a class="button" href="{{.CSVURL}}">Download CSV</a>
+  </div>
+</div>
+
+<form class="filters" method="get" action="/report">
+  <label class="field">group by
+    <select name="by">
+      <option value="project" {{if eq .By "project"}}selected{{end}}>project</option>
+      <option value="tag" {{if eq .By "tag"}}selected{{end}}>tag</option>
+      <option value="day" {{if eq .By "day"}}selected{{end}}>day</option>
+    </select>
+  </label>
+  <label class="field">from
+    <input type="date" name="from" value="{{.Filter.From}}">
+  </label>
+  <label class="field">to
+    <input type="date" name="to" value="{{.Filter.To}}">
+  </label>
+  <label class="field">project
+    <select name="project">
+      <option value="">all</option>
+      {{range .Projects}}<option {{if eq .Name $.Filter.Project}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label class="field">tag
+    <input name="tag" value="{{.Filter.Tag}}" size="12">
+  </label>
+  <button class="primary">Run</button>
+</form>
+
+<table>
+  <thead><tr><th>{{.By}}</th><th class="num">Logged</th><th class="num">Planned</th></tr></thead>
+  <tbody>
+  {{range .Report.Lines}}
+  <tr>
+    <td>{{.Key}}</td>
+    <td class="num">{{hours .LoggedHours}}</td>
+    <td class="num">{{if .PlannedHours}}{{hours .PlannedHours}}{{end}}</td>
+  </tr>
+  {{else}}
+  <tr><td colspan="3" class="empty">No entries in this range.</td></tr>
+  {{end}}
+  </tbody>
+  <tfoot><tr>
+    <td>total</td>
+    <td class="num">{{hours .Report.TotalLogged}}</td>
+    <td class="num">{{hours .Report.TotalPlanned}}</td>
+  </tr></tfoot>
+</table>
+{{template "footer"}}

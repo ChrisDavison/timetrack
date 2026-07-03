@@ -1,0 +1,36 @@
+{{template "header" .}}
+<div class="page-head">
+  <h1>Calendar</h1>
+  <span class="sub">{{.RangeLabel}}</span>
+  <div class="actions pager">
+    <a class="button" href="/calendar?week={{.PrevWeek}}">‹</a>
+    <a class="button" href="/calendar">today</a>
+    <a class="button" href="/calendar?week={{.NextWeek}}">›</a>
+    <a href="/calendar?view=month&month={{.ThisMonth}}" style="margin-left: 0.5rem;">month view</a>
+  </div>
+</div>
+
+<div class="cal-grid" style="grid-template-columns: 56px repeat(7, 1fr); grid-template-rows: auto repeat({{.GridRows}}, 21px);">
+  <div class="cal-head" style="grid-column: 1; grid-row: 1;"></div>
+  {{range .Days}}
+  <div class="cal-head{{if .IsToday}} today-col{{end}}" style="grid-column: {{.Col}}; grid-row: 1;">{{.Label}}</div>
+  {{end}}
+
+  {{range .Slots}}
+  <div class="cal-time" style="grid-column: 1; grid-row: {{.Row}};">{{.Label}}</div>
+  {{end}}
+
+  {{range .Cells}}
+  <a class="cal-cell{{if .HalfHour}} hour-start{{end}}" style="grid-column: {{.Col}}; grid-row: {{.Row}};"
+     href="/entries/new?date={{.Date}}&start={{.Start}}" title="add entry {{.Date}} {{.Start}}"></a>
+  {{end}}
+
+  {{range .Blocks}}
+  <a class="cal-block{{if .Planned}} planned-block{{end}}"
+     style="grid-column: {{.Col}}; grid-row: {{.RowStart}} / {{.RowEnd}}; background-color: {{.Color}};"
+     href="/entries/{{.Entry.ID}}/edit">
+    <span class="when">{{.Entry.Start}} {{.Entry.ProjectName}}</span><br>{{.Entry.Subject}}
+  </a>
+  {{end}}
+</div>
+{{template "footer"}}

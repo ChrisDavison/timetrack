@@ -1,0 +1,42 @@
+{{template "header" .}}
+<h1>Projects</h1>
+
+{{if .Projects}}
+<table>
+  <thead><tr><th>Project</th><th>Color</th><th></th></tr></thead>
+  <tbody>
+  {{range .Projects}}
+  <tr>
+    <td>{{.Name}}{{if .Archived}} <span class="tag">archived</span>{{end}}</td>
+    <td>
+      <form class="inline" method="post" action="/projects/{{.ID}}">
+        <input type="color" name="color" value="{{if .Color}}{{.Color}}{{else}}#c3c2b7{{end}}"
+               onchange="this.form.submit()" title="project color">
+      </form>
+    </td>
+    <td>
+      <form class="inline" method="post" action="/projects/{{.ID}}">
+        {{if .Archived}}
+        <input type="hidden" name="archived" value="0"><button class="quiet">unarchive</button>
+        {{else}}
+        <input type="hidden" name="archived" value="1"><button class="quiet">archive</button>
+        {{end}}
+      </form>
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}<div class="card"><div class="empty">No projects yet — add your first below.</div></div>{{end}}
+
+<h2>Add project</h2>
+<form class="stack-form" method="post" action="/projects">
+  <label class="field">name
+    <input name="name" required placeholder="e.g. EngD">
+  </label>
+  <label class="field">color
+    <input type="color" name="color" value="#2a78d6">
+  </label>
+  <button class="primary">Add</button>
+</form>
+{{template "footer"}}

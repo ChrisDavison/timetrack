@@ -1,0 +1,95 @@
+{{template "header" .}}
+<div class="page-head">
+  <h1>Dashboard</h1>
+  <span class="sub">{{.Date}}</span>
+</div>
+
+<div class="cards">
+  <div class="card tile">
+    <div class="label">Today</div>
+    <div class="value">{{hours .TodayTotal}} <small>of {{hours .CapacityDay}}</small></div>
+    <div class="detail">{{hours .TodayLogged}} logged · {{hours .TodayPlanned}} planned</div>
+    <div class="meter{{if .OverToday}} overfull{{end}}">
+      <div class="logged" style="width: {{pct .TodayLogged .CapacityDay}}%"></div>
+      <div class="planned" style="width: {{pct .TodayPlanned .CapacityDay}}%"></div>
+    </div>
+    {{if .OverToday}}<div class="detail status-over">⚠ over-committed today</div>
+    {{else}}<div class="detail status-ok">✓ within capacity</div>{{end}}
+  </div>
+
+  <div class="card tile">
+    <div class="label">This week</div>
+    <div class="value">{{hours .WeekTotal}} <small>of {{hours .CapacityWeek}}</small></div>
+    <div class="detail">{{hours .WeekLogged}} logged · {{hours .WeekPlanned}} planned</div>
+    <div class="meter{{if .OverWeek}} overfull{{end}}">
+      <div class="logged" style="width: {{pct .WeekLogged .CapacityWeek}}%"></div>
+      <div class="planned" style="width: {{pct .WeekPlanned .CapacityWeek}}%"></div>
+    </div>
+    {{if .OverWeek}}<div class="detail status-over">⚠ over-committed this week</div>
+    {{else}}<div class="detail status-ok">✓ within capacity</div>{{end}}
+  </div>
+
+  <div class="card">
+    <div class="label" style="color: var(--muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em;">Timer</div>
+    {{if .Running}}
+    <div class="timer-live">
+      <span class="pulse"></span>
+      <div>
+        <div><strong>{{.Running.ProjectName}}</strong> — {{.Running.Subject}}</div>
+        <div class="elapsed">{{.Elapsed}}</div>
+      </div>
+      <form method="post" action="/timer/stop"><button class="primary">Stop</button></form>
+    </div>
+    {{else}}
+    <form class="stack-form" method="post" action="/timer/start" style="margin: 0.5rem 0 0;">
+      <label class="field">project
+        <select name="project" required>
+          {{range .Projects}}<option>{{.Name}}</option>{{end}}
+        </select>
+      </label>
+      <label class="field">subject
+        <input name="subject" required placeholder="what are you doing?">
+      </label>
+      <button class="primary">Start</button>
+    </form>
+    {{end}}
+  </div>
+</div>
+
+<h2>This week by project</h2>
+<div class="card">
+  {{if .Bars}}
+  <div class="bars">
+    {{range .Bars}}
+    <div class="bar-row">
+      <span class="name"><span class="dot" style="background: {{.Color}}"></span>{{.Name}}</span>
+      <div class="bar-track">
+        <div class="bar-seg" style="width: {{printf "%.1f" .LoggedPct}}%; background: {{.Color}}"></div>
+        <div class="bar-seg planned-seg" style="width: {{printf "%.1f" .PlannedPct}}%; background: {{.Color}}"></div>
+      </div>
+      <span class="hours">{{hours .Logged}}{{if .Planned}} + {{hours .Planned}} planned{{end}}</span>
+    </div>
+    {{end}}
+  </div>
+  {{else}}<div class="empty">Nothing tracked this week yet.</div>{{end}}
+</div>
+
+<h2>Today's entries</h2>
+{{if .TodayEntries}}
+<table>
+  <thead><tr><th>Start</th><th class="num">Hours</th><th>Project</th><th>Subject</th><th>Tags</th><th></th></tr></thead>
+  <tbody>
+  {{range .TodayEntries}}
+  <tr>
+    <td>{{.Start}}</td>
+    <td class="num">{{hours .Hours}}</td>
+    <td><span class="dot" style="background: {{if .ProjectColor}}{{.ProjectColor}}{{else}}var(--baseline){{end}}"></span>{{.ProjectName}}</td>
+    <td>{{.Subject}}{{if eq (printf "%s" .Kind) "planned"}} <span class="kind-planned">planned</span>{{end}}</td>
+    <td>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</td>
+    <td><a href="/entries/{{.ID}}/edit">edit</a></td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}<div class="card"><div class="empty">No entries today. <a href="/entries/new">Add one</a> or start the timer.</div></div>{{end}}
+{{template "footer"}}

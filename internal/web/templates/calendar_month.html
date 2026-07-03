@@ -1,0 +1,27 @@
+{{template "header" .}}
+<div class="page-head">
+  <h1>Calendar</h1>
+  <span class="sub">{{.MonthLabel}}</span>
+  <div class="actions pager">
+    <a class="button" href="/calendar?view=month&month={{.PrevMonth}}">‹</a>
+    <a class="button" href="/calendar?view=month">this month</a>
+    <a class="button" href="/calendar?view=month&month={{.NextMonth}}">›</a>
+    <a href="/calendar" style="margin-left: 0.5rem;">week view</a>
+  </div>
+</div>
+
+<div class="month-grid">
+  <div class="month-head">Mon</div><div class="month-head">Tue</div><div class="month-head">Wed</div>
+  <div class="month-head">Thu</div><div class="month-head">Fri</div><div class="month-head">Sat</div>
+  <div class="month-head">Sun</div>
+  {{range .Weeks}}{{range .}}
+  <a class="month-day h{{.Intensity}}{{if not .InMonth}} other{{end}}{{if .IsToday}} today{{end}}"
+     href="/calendar?week={{.Date}}">
+    <span class="d">{{.Day}}</span>
+    {{if or .Logged .Planned}}
+    <div class="h">{{if .Logged}}{{hours .Logged}}{{end}}{{if .Planned}} +{{hours .Planned}} planned{{end}}</div>
+    {{end}}
+  </a>
+  {{end}}{{end}}
+</div>
+{{template "footer"}}

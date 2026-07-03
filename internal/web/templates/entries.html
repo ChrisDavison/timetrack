@@ -1,0 +1,77 @@
+{{template "header" .}}
+<div class="page-head">
+  <h1>Entries</h1>
+</div>
+
+<form class="filters" hx-get="/entries" hx-target="#entry-table" hx-swap="outerHTML" hx-push-url="true">
+  <label class="field">project
+    <select name="project">
+      <option value="">all</option>
+      {{range .Projects}}<option {{if eq .Name $.Filter.Project}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </label>
+  <label class="field">tag
+    <input name="tag" value="{{.Filter.Tag}}" placeholder="research" size="12">
+  </label>
+  <label class="field">from
+    <input type="date" name="from" value="{{.Filter.From}}">
+  </label>
+  <label class="field">to
+    <input type="date" name="to" value="{{.Filter.To}}">
+  </label>
+  <label class="field">kind
+    <select name="kind">
+      <option value="">all</option>
+      <option value="logged" {{if eq (printf "%s" .Filter.Kind) "logged"}}selected{{end}}>logged</option>
+      <option value="planned" {{if eq (printf "%s" .Filter.Kind) "planned"}}selected{{end}}>planned</option>
+    </select>
+  </label>
+  <label class="field">search
+    <input type="search" name="search" value="{{.Filter.Search}}" placeholder="subject or notes" size="16">
+  </label>
+  <button class="primary">Filter</button>
+  <a href="/entries" class="quiet" style="padding: 0.35rem;">clear</a>
+</form>
+
+{{template "entry_table" .}}
+{{template "footer"}}
+
+{{define "entry_table"}}
+<div id="entry-table">
+{{if .Entries}}
+<table>
+  <thead><tr>
+    <th>Date</th><th>Start</th><th class="num">Hours</th><th>Project</th>
+    <th>Subject</th><th>Tags</th><th>Kind</th><th></th>
+  </tr></thead>
+  <tbody>
+  {{range .Entries}}
+  <tr>
+    <td>{{.Date}}</td>
+    <td>{{.Start}}</td>
+    <td class="num">{{hours .Hours}}</td>
+    <td><span class="dot" style="background: {{if .ProjectColor}}{{.ProjectColor}}{{else}}var(--baseline){{end}}"></span>{{.ProjectName}}</td>
+    <td>{{.Subject}}{{if .Notes}} <span title="{{.Notes}}">🗒</span>{{end}}</td>
+    <td>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</td>
+    <td>{{if eq (printf "%s" .Kind) "planned"}}<span class="kind-planned">planned</span>{{else}}logged{{end}}</td>
+    <td style="white-space: nowrap;">
+      <a href="/entries/{{.ID}}/edit">edit</a>
+      {{if eq (printf "%s" .Kind) "planned"}}
+      <form class="inline" method="post" action="/entries/{{.ID}}/confirm"><button class="quiet" title="mark as done">✓ done</button></form>
+      {{end}}
+      <form class="inline" method="post" action="/entries/{{.ID}}/delete"><button class="quiet danger">delete</button></form>
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+  <tfoot><tr>
+    <td colspan="2">total</td>
+    <td class="num">{{hours .TotalLogged}}</td>
+    <td colspan="5">{{if .TotalPlanned}}+ {{hours .TotalPlanned}} planned{{end}}</td>
+  </tr></tfoot>
+</table>
+{{else}}
+<div class="card"><div class="empty">No entries match. <a href="/entries/new">Add an entry</a>.</div></div>
+{{end}}
+</div>
+{{end}}

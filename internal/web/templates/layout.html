@@ -1,0 +1,28 @@
+{{define "header"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · timetrack</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+<nav>
+  <a class="brand" href="/">timetrack</a>
+  <a href="/" {{if eq .Active "dashboard"}}class="active"{{end}}>Dashboard</a>
+  <a href="/entries" {{if eq .Active "entries"}}class="active"{{end}}>Entries</a>
+  <a href="/calendar" {{if eq .Active "calendar"}}class="active"{{end}}>Calendar</a>
+  <a href="/report" {{if eq .Active "report"}}class="active"{{end}}>Report</a>
+  <a href="/projects" {{if eq .Active "projects"}}class="active"{{end}}>Projects</a>
+  <span class="spacer"></span>
+  <a class="button" href="/entries/new">+ New entry</a>
+</nav>
+<main>
+{{end}}
+
+{{define "footer"}}
+</main>
+</body>
+</html>
+{{end}}
