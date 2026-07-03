@@ -27,7 +27,7 @@
 
   {{range .Blocks}}
   <a class="cal-block{{if .Planned}} planned-block{{end}}"
-     style="grid-column: {{.Col}}; grid-row: {{.RowStart}} / {{.RowEnd}}; background-color: {{.Color}};"
+     style="grid-column: {{.Col}}; grid-row: {{.RowStart}} / {{.RowEnd}}; background-color: {{.Color}}; color: {{texton .Color}};"
      href="/entries/{{.Entry.ID}}/edit">
     <span class="when">{{.Entry.Start}} {{.Entry.ProjectPath}}</span><br>{{.Entry.Subject}}
   </a>

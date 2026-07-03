@@ -40,6 +40,7 @@ func NewServer(s *store.Store, capacityDay float64) http.Handler {
 				}
 				return strconv.FormatFloat(min(100*v/of, 100), 'f', 1, 64)
 			},
+			"texton": textOn,
 		}).ParseFS(templateFS, "templates/*.html")),
 		capacityDay: capacityDay,
 	}
@@ -72,6 +73,43 @@ func Serve(s *store.Store, addr string, capacityDay float64) error {
 }
 
 func today() string { return time.Now().Format("2006-01-02") }
+
+// textOn picks a readable foreground colour (near-black or white) for text
+// placed on top of the given hex background colour, based on perceived
+// luminance. Falls back to white for empty or malformed input.
+func textOn(hex string) string {
+	hex = strings.TrimPrefix(hex, "#")
+	var r, g, b int64
+	var err error
+	switch len(hex) {
+	case 3:
+		r, err = strconv.ParseInt(strings.Repeat(string(hex[0]), 2), 16, 0)
+		if err == nil {
+			g, err = strconv.ParseInt(strings.Repeat(string(hex[1]), 2), 16, 0)
+		}
+		if err == nil {
+			b, err = strconv.ParseInt(strings.Repeat(string(hex[2]), 2), 16, 0)
+		}
+	case 6:
+		r, err = strconv.ParseInt(hex[0:2], 16, 0)
+		if err == nil {
+			g, err = strconv.ParseInt(hex[2:4], 16, 0)
+		}
+		if err == nil {
+			b, err = strconv.ParseInt(hex[4:6], 16, 0)
+		}
+	default:
+		err = fmt.Errorf("texton: invalid colour %q", hex)
+	}
+	if err != nil {
+		return "#ffffff"
+	}
+	luminance := 0.299*float64(r) + 0.587*float64(g) + 0.114*float64(b)
+	if luminance > 150 {
+		return "#0b0b0b"
+	}
+	return "#ffffff"
+}
 
 // weekOf returns the Monday of the week containing t.
 func weekOf(t time.Time) time.Time {
