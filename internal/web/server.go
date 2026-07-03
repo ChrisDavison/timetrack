@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/davison/timetrack/internal/report"
@@ -122,9 +123,14 @@ func (s *server) dashboard(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	// Bars show top-level projects only; rollup lines already include
+	// sub-project hours.
 	var bars []projectBar
 	maxHours := 0.1
 	for _, l := range weekRep.Lines {
+		if l.Sub {
+			continue
+		}
 		if t := l.LoggedHours + l.PlannedHours; t > maxHours {
 			maxHours = t
 		}
@@ -136,9 +142,12 @@ func (s *server) dashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, p := range projects {
-		projectColors[p.Name] = p.Color
+		projectColors[p.Path()] = p.Color
 	}
 	for _, l := range weekRep.Lines {
+		if l.Sub {
+			continue
+		}
 		bars = append(bars, projectBar{
 			Name: l.Key, Color: projectColors[l.Key],
 			Logged: l.LoggedHours, Planned: l.PlannedHours,
@@ -344,7 +353,7 @@ func (s *server) entryEdit(w http.ResponseWriter, r *http.Request) {
 	}
 	s.renderEntryForm(w, http.StatusOK, entryForm{
 		Action: fmt.Sprintf("/entries/%d", e.ID), Title: "Edit entry",
-		Project: e.ProjectName, Subject: e.Subject, Notes: e.Notes,
+		Project: e.ProjectPath(), Subject: e.Subject, Notes: e.Notes,
 		Date: e.Date, Start: e.Start,
 		Duration: fmt.Sprintf("%dm", e.Blocks*store.BlockMinutes),
 		Kind:     string(e.Kind), Tags: tags,
@@ -418,7 +427,11 @@ func (s *server) projects(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) projectCreate(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.store.CreateProject(r.FormValue("name"), r.FormValue("color")); err != nil {
+	name := strings.TrimSpace(r.FormValue("name"))
+	if parent := r.FormValue("parent"); parent != "" {
+		name = parent + "/" + name
+	}
+	if _, err := s.store.CreateProject(name, r.FormValue("color")); err != nil {
 		s.fail(w, err)
 		return
 	}

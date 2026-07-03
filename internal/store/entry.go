@@ -20,22 +20,32 @@ const (
 const BlockMinutes = 30
 
 type Entry struct {
-	ID           int64
-	ProjectID    int64
-	ProjectName  string
-	ProjectColor string
-	Subject      string
-	Notes        string
-	Date         string // YYYY-MM-DD
-	Start        string // HH:MM, snapped to :00/:30
-	Blocks       int    // 30-min blocks; 0 while running
-	Kind         Kind
-	StartedAt    time.Time // set while running
-	Tags         []string
+	ID            int64
+	ProjectID     int64
+	ProjectName   string
+	ProjectParent string // "" when the project is top-level
+	ProjectColor  string
+	Subject       string
+	Notes         string
+	Date          string // YYYY-MM-DD
+	Start         string // HH:MM, snapped to :00/:30
+	Blocks        int    // 30-min blocks; 0 while running
+	Kind          Kind
+	StartedAt     time.Time // set while running
+	Tags          []string
 }
 
 // Hours returns the entry duration in hours.
 func (e Entry) Hours() float64 { return float64(e.Blocks) * BlockMinutes / 60 }
+
+// ProjectPath is the entry's full project reference: "Parent/Child" or a
+// bare top-level name.
+func (e Entry) ProjectPath() string {
+	if e.ProjectParent != "" {
+		return e.ProjectParent + "/" + e.ProjectName
+	}
+	return e.ProjectName
+}
 
 // NewEntry holds user input for creating or updating an entry.
 type NewEntry struct {
@@ -186,14 +196,16 @@ func (s *Store) setTags(entryID int64, tags []string) error {
 }
 
 const entrySelect = `
-	SELECT e.id, e.project_id, p.name, p.color, e.subject, e.notes,
+	SELECT e.id, e.project_id, p.name, COALESCE(pp.name, ''), p.color, e.subject, e.notes,
 	       e.date, e.start_time, COALESCE(e.duration_blocks, 0), e.kind, COALESCE(e.started_at, '')
-	FROM entries e JOIN projects p ON p.id = e.project_id`
+	FROM entries e
+	JOIN projects p ON p.id = e.project_id
+	LEFT JOIN projects pp ON pp.id = p.parent_id`
 
 func scanEntry(row interface{ Scan(...any) error }) (Entry, error) {
 	var e Entry
 	var startedAt string
-	err := row.Scan(&e.ID, &e.ProjectID, &e.ProjectName, &e.ProjectColor, &e.Subject, &e.Notes,
+	err := row.Scan(&e.ID, &e.ProjectID, &e.ProjectName, &e.ProjectParent, &e.ProjectColor, &e.Subject, &e.Notes,
 		&e.Date, &e.Start, &e.Blocks, &e.Kind, &startedAt)
 	if err != nil {
 		return Entry{}, err
@@ -249,8 +261,13 @@ func (s *Store) Entries(f Filter) ([]Entry, error) {
 	var conds []string
 	var args []any
 	if f.Project != "" {
-		conds = append(conds, `p.name = ? COLLATE NOCASE`)
-		args = append(args, f.Project)
+		pr, err := s.ProjectByName(f.Project)
+		if err != nil {
+			return nil, err
+		}
+		// A top-level project includes its sub-projects' entries.
+		conds = append(conds, `(e.project_id = ? OR p.parent_id = ?)`)
+		args = append(args, pr.ID, pr.ID)
 	}
 	if f.Tag != "" {
 		conds = append(conds, `e.id IN (SELECT et.entry_id FROM entry_tags et JOIN tags t ON t.id = et.tag_id WHERE t.name = ?)`)

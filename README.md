@@ -8,6 +8,15 @@ notes, and `#tags`. Entries are either **logged** (work done) or **planned**
 (future allocation), so the dashboard can warn when a day or week is
 over-committed.
 
+Projects can have one level of sub-projects, referenced everywhere as
+`Parent/Child` (e.g. `DDC/Computer Vision`). Time can be logged against
+either level. Filtering by a parent includes its sub-projects; project
+reports show each parent's rolled-up total with an indented breakdown
+(including a `(direct)` line for the parent's own time). **CSV exports stay
+flat** — one full-path row per (sub-)project, no rollup rows — so summing a
+column never double-counts. Sub-projects inherit their parent's color unless
+given their own, and archiving a parent archives its children.
+
 ## Build
 
 ```sh
@@ -34,7 +43,9 @@ tt serve -addr :9000 -capacity 7.5
 
 ```sh
 tt projects add EngD '#2a78d6'
+tt projects add 'EngD/Thesis'       # sub-project
 tt add -p EngD -s "thesis chapter 3" -d 1.5h -at 09:30 -t '#research #writing'
+tt add -p 'EngD/Thesis' -s "figures" -d 1h
 tt add -p EngD -s "supervisor meeting" -d 1h -date tomorrow -plan
 tt start -p EngD -s "deep work"    # live timer
 tt status

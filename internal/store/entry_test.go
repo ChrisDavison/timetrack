@@ -238,3 +238,55 @@ func TestConfirmPlanned(t *testing.T) {
 		t.Error("confirming a non-planned entry should error")
 	}
 }
+
+func TestEntryProjectPath(t *testing.T) {
+	s := testStore(t)
+	mustProject(t, s, "DDC")
+	if _, err := s.CreateProject("DDC/CV", ""); err != nil {
+		t.Fatal(err)
+	}
+	e, err := s.AddEntry(NewEntry{Project: "DDC/CV", Subject: "annotate", Date: "2026-07-03", Start: "09:00", Minutes: 30, Kind: KindLogged})
+	if err != nil {
+		t.Fatalf("AddEntry on sub-project: %v", err)
+	}
+	if e.ProjectPath() != "DDC/CV" {
+		t.Errorf("ProjectPath() = %q", e.ProjectPath())
+	}
+}
+
+func TestFilterParentIncludesChildren(t *testing.T) {
+	s := testStore(t)
+	mustProject(t, s, "DDC")
+	mustProject(t, s, "Personal")
+	for _, name := range []string{"DDC/CV", "DDC/Appleby"} {
+		if _, err := s.CreateProject(name, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add := func(project, subject string) {
+		t.Helper()
+		if _, err := s.AddEntry(NewEntry{Project: project, Subject: subject, Date: "2026-07-03", Start: "09:00", Minutes: 30, Kind: KindLogged}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("DDC", "admin")
+	add("DDC/CV", "annotate")
+	add("DDC/Appleby", "site visit")
+	add("Personal", "tax")
+
+	got, err := s.Entries(Filter{Project: "DDC"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Errorf("parent filter should include children: got %d entries", len(got))
+	}
+
+	got, err = s.Entries(Filter{Project: "DDC/CV"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Subject != "annotate" {
+		t.Errorf("sub-project filter should be exact: %+v", got)
+	}
+}

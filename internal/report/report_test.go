@@ -2,6 +2,7 @@ package report
 
 import (
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -130,5 +131,88 @@ func TestCSV(t *testing.T) {
 	}
 	if !strings.Contains(csv, "EngD,3.0,0.0") {
 		t.Errorf("csv missing EngD row: %q", csv)
+	}
+}
+
+// hierarchySeeded: DDC has 1h direct logged, DDC/CV 2h logged,
+// DDC/Appleby 1.5h planned; Personal 0.5h logged.
+func hierarchySeeded(t *testing.T) *store.Store {
+	t.Helper()
+	s, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	for _, name := range []string{"DDC", "Personal", "DDC/CV", "DDC/Appleby"} {
+		if _, err := s.CreateProject(name, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add := func(project string, minutes int, kind store.Kind) {
+		t.Helper()
+		if _, err := s.AddEntry(store.NewEntry{Project: project, Subject: "w", Date: "2026-07-03", Start: "09:00", Minutes: minutes, Kind: kind}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("DDC", 60, store.KindLogged)
+	add("DDC/CV", 120, store.KindLogged)
+	add("DDC/Appleby", 90, store.KindPlanned)
+	add("Personal", 30, store.KindLogged)
+	return s
+}
+
+func TestByProjectRollup(t *testing.T) {
+	s := hierarchySeeded(t)
+	r, err := Build(s, store.Filter{}, ByProject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type row struct {
+		key string
+		sub bool
+		log float64
+		pln float64
+	}
+	var got []row
+	for _, l := range r.Lines {
+		got = append(got, row{l.Key, l.Sub, l.LoggedHours, l.PlannedHours})
+	}
+	want := []row{
+		{"DDC", false, 3.0, 1.5},
+		{"(direct)", true, 1.0, 0},
+		{"Appleby", true, 0, 1.5},
+		{"CV", true, 2.0, 0},
+		{"Personal", false, 0.5, 0},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("lines = %+v\nwant    %+v", got, want)
+	}
+}
+
+func TestParentWithoutChildrenHasNoSubLines(t *testing.T) {
+	s := hierarchySeeded(t)
+	r, err := Build(s, store.Filter{Project: "Personal"}, ByProject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Lines) != 1 || r.Lines[0].Sub {
+		t.Errorf("lines = %+v", r.Lines)
+	}
+}
+
+func TestCSVIsFlatFullPaths(t *testing.T) {
+	s := hierarchySeeded(t)
+	r, _ := Build(s, store.Filter{}, ByProject)
+	csv := r.CSV()
+	for _, want := range []string{"DDC,1.0,0.0", "DDC/CV,2.0,0.0", "DDC/Appleby,0.0,1.5", "Personal,0.5,0.0"} {
+		if !strings.Contains(csv, want+"\n") {
+			t.Errorf("csv missing %q:\n%s", want, csv)
+		}
+	}
+	if strings.Contains(csv, "DDC,3.0") {
+		t.Errorf("csv must not contain rollup rows:\n%s", csv)
+	}
+	if strings.Contains(csv, "(direct)") {
+		t.Errorf("csv must not contain display-only keys:\n%s", csv)
 	}
 }

@@ -23,7 +23,7 @@
   <label class="field">project
     <select name="project">
       <option value="">all</option>
-      {{range .Projects}}<option {{if eq .Name $.Filter.Project}}selected{{end}}>{{.Name}}</option>{{end}}
+      {{range .Projects}}<option value="{{.Path}}" {{if eq .Path $.Filter.Project}}selected{{end}}>{{if .ParentName}}&nbsp;&nbsp;&nbsp;{{end}}{{.Name}}</option>{{end}}
     </select>
   </label>
   <label class="field">tag
@@ -37,7 +37,7 @@
   <tbody>
   {{range .Report.Lines}}
   <tr>
-    <td>{{.Key}}</td>
+    <td>{{if .Sub}}<span style="padding-left: 1.5rem; color: var(--ink-2);">{{.Key}}</span>{{else}}{{.Key}}{{end}}</td>
     <td class="num">{{hours .LoggedHours}}</td>
     <td class="num">{{if .PlannedHours}}{{hours .PlannedHours}}{{end}}</td>
   </tr>

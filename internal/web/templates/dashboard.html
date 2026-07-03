@@ -35,7 +35,7 @@
     <div class="timer-live">
       <span class="pulse"></span>
       <div>
-        <div><strong>{{.Running.ProjectName}}</strong> — {{.Running.Subject}}</div>
+        <div><strong>{{.Running.ProjectPath}}</strong> — {{.Running.Subject}}</div>
         <div class="elapsed">{{.Elapsed}}</div>
       </div>
       <form method="post" action="/timer/stop"><button class="primary">Stop</button></form>
@@ -44,7 +44,7 @@
     <form class="stack-form" method="post" action="/timer/start" style="margin: 0.5rem 0 0;">
       <label class="field">project
         <select name="project" required>
-          {{range .Projects}}<option>{{.Name}}</option>{{end}}
+          {{range .Projects}}<option value="{{.Path}}">{{if .ParentName}}&nbsp;&nbsp;&nbsp;{{end}}{{.Name}}</option>{{end}}
         </select>
       </label>
       <label class="field">subject
@@ -83,7 +83,7 @@
   <tr>
     <td>{{.Start}}</td>
     <td class="num">{{hours .Hours}}</td>
-    <td><span class="dot" style="background: {{if .ProjectColor}}{{.ProjectColor}}{{else}}var(--baseline){{end}}"></span>{{.ProjectName}}</td>
+    <td><span class="dot" style="background: {{if .ProjectColor}}{{.ProjectColor}}{{else}}var(--baseline){{end}}"></span>{{.ProjectPath}}</td>
     <td>{{.Subject}}{{if eq (printf "%s" .Kind) "planned"}} <span class="kind-planned">planned</span>{{end}}</td>
     <td>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</td>
     <td><a href="/entries/{{.ID}}/edit">edit</a></td>

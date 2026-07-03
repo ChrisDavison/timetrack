@@ -8,6 +8,7 @@
   {{range .Projects}}
   <tr>
     <td>
+      {{if .ParentName}}<span style="color: var(--muted); padding: 0 0.3rem 0 1rem;">⤷</span>{{end}}
       <form class="inline" method="post" action="/projects/{{.ID}}">
         <input name="name" value="{{.Name}}" required>
         <button class="quiet">rename</button>
@@ -39,6 +40,12 @@
 <form class="stack-form" method="post" action="/projects">
   <label class="field">name
     <input name="name" required placeholder="e.g. EngD">
+  </label>
+  <label class="field">parent (optional)
+    <select name="parent">
+      <option value="">— top level —</option>
+      {{range .Projects}}{{if not .ParentName}}<option>{{.Name}}</option>{{end}}{{end}}
+    </select>
   </label>
   <label class="field">color
     <input type="color" name="color" value="#2a78d6">

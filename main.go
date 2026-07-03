@@ -241,7 +241,7 @@ func runList(args []string) error {
 }
 
 func formatEntry(e store.Entry) string {
-	line := fmt.Sprintf("%s %s %4.1fh  %-12s %s", e.Date, e.Start, e.Hours(), e.ProjectName, e.Subject)
+	line := fmt.Sprintf("%s %s %4.1fh  %-12s %s", e.Date, e.Start, e.Hours(), e.ProjectPath(), e.Subject)
 	if len(e.Tags) > 0 {
 		line += "  #" + strings.Join(e.Tags, " #")
 	}
@@ -291,7 +291,11 @@ func runReport(args []string) error {
 		fmt.Printf("%s to %s\n", f.From, f.To)
 	}
 	for _, l := range r.Lines {
-		fmt.Printf("%-20s %6.1fh logged", l.Key, l.LoggedHours)
+		key := l.Key
+		if l.Sub {
+			key = "  " + key
+		}
+		fmt.Printf("%-20s %6.1fh logged", key, l.LoggedHours)
 		if l.PlannedHours > 0 {
 			fmt.Printf("  %6.1fh planned", l.PlannedHours)
 		}
@@ -341,12 +345,16 @@ func runProjects(args []string) error {
 			if p.Archived {
 				suffix = "  [archived]"
 			}
-			fmt.Printf("%-20s %s%s\n", p.Name, p.Color, suffix)
+			name := p.Name
+			if p.ParentName != "" {
+				name = "  " + name
+			}
+			fmt.Printf("%-20s %s%s\n", name, p.Color, suffix)
 		}
 		return nil
 	case "add":
 		if len(rest) < 2 {
-			return fmt.Errorf("usage: tt projects add <name> [color]")
+			return fmt.Errorf("usage: tt projects add <name or Parent/Sub> [color]")
 		}
 		color := ""
 		if len(rest) > 2 {

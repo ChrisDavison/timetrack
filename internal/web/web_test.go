@@ -204,3 +204,60 @@ func TestRenameProjectViaForm(t *testing.T) {
 		t.Errorf("project not renamed: %v", err)
 	}
 }
+
+func makeSub(t *testing.T, s *store.Store, path string) {
+	t.Helper()
+	if _, err := s.CreateProject(path, ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEntryFormListsSubProjectPaths(t *testing.T) {
+	s, h := testServer(t)
+	makeSub(t, s, "EngD/Thesis")
+
+	body := get(t, h, "/entries/new").Body.String()
+	if !strings.Contains(body, `value="EngD/Thesis"`) {
+		t.Errorf("entry form select should offer sub-project path: %s", body)
+	}
+}
+
+func TestEntriesFilterByParentIncludesChildren(t *testing.T) {
+	s, h := testServer(t)
+	makeSub(t, s, "EngD/Thesis")
+	addEntry(t, s, "EngD", "general admin", "2026-07-01", 30, store.KindLogged, "")
+	addEntry(t, s, "EngD/Thesis", "chapter 3", "2026-07-01", 60, store.KindLogged, "")
+
+	body := get(t, h, "/entries?project=EngD").Body.String()
+	if !strings.Contains(body, "general admin") || !strings.Contains(body, "chapter 3") {
+		t.Errorf("parent filter should include sub-project entries")
+	}
+	if !strings.Contains(body, "EngD/Thesis") {
+		t.Errorf("entries table should display full project path")
+	}
+}
+
+func TestCreateSubProjectViaForm(t *testing.T) {
+	s, h := testServer(t)
+	rec := postForm(t, h, "/projects", url.Values{
+		"name": {"Thesis"}, "parent": {"EngD"}, "color": {""},
+	})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("create sub-project = %d", rec.Code)
+	}
+	p, err := s.ProjectByName("EngD/Thesis")
+	if err != nil {
+		t.Fatalf("sub-project not created: %v", err)
+	}
+	if p.Color != "#4a90d9" {
+		t.Errorf("sub-project should inherit parent color, got %q", p.Color)
+	}
+}
+
+func TestProjectsPageHasParentSelect(t *testing.T) {
+	_, h := testServer(t)
+	body := get(t, h, "/projects").Body.String()
+	if !strings.Contains(body, `name="parent"`) {
+		t.Errorf("projects page add form should have a parent select")
+	}
+}
