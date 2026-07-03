@@ -215,6 +215,96 @@ func TestMigrationFromV1(t *testing.T) {
 	}
 }
 
+func TestDeleteProject(t *testing.T) {
+	s := testStore(t)
+	empty, _ := s.CreateProject("Empty", "")
+	if err := s.DeleteProject(empty.ID); err != nil {
+		t.Fatalf("DeleteProject empty: %v", err)
+	}
+	if _, err := s.ProjectByName("Empty"); err == nil {
+		t.Error("deleted project should no longer resolve")
+	}
+
+	withEntry, _ := s.CreateProject("HasEntry", "")
+	if _, err := s.AddEntry(NewEntry{Project: "HasEntry", Subject: "w", Date: "2026-07-01", Start: "09:00", Minutes: 30, Kind: KindLogged}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteProject(withEntry.ID); err == nil {
+		t.Error("want error deleting project with entries, got nil")
+	}
+
+	parent, _ := s.CreateProject("Parent", "")
+	s.CreateProject("Parent/Child", "")
+	if err := s.DeleteProject(parent.ID); err == nil {
+		t.Error("want error deleting project with sub-projects, got nil")
+	}
+}
+
+func TestSetParent(t *testing.T) {
+	s := testStore(t)
+	ddc, _ := s.CreateProject("DDC", "")
+	solo, _ := s.CreateProject("Solo", "")
+	s.CreateProject("DDC/CV", "")
+
+	// Assign a childless top-level project under a parent.
+	if err := s.SetParent(solo.ID, "DDC"); err != nil {
+		t.Fatalf("SetParent assign: %v", err)
+	}
+	got, err := s.ProjectByName("DDC/Solo")
+	if err != nil {
+		t.Fatalf("Solo should resolve under DDC: %v", err)
+	}
+	if got.ParentID != ddc.ID {
+		t.Errorf("Solo.ParentID = %d, want %d", got.ParentID, ddc.ID)
+	}
+
+	// Unassign back to top level.
+	if err := s.SetParent(got.ID, ""); err != nil {
+		t.Fatalf("SetParent unassign: %v", err)
+	}
+	if _, err := s.ProjectByName("Solo"); err != nil {
+		t.Errorf("Solo should resolve top-level again: %v", err)
+	}
+
+	// Reject assigning under a sub-project (would create 3 tiers).
+	solo2, _ := s.ProjectByName("Solo")
+	if err := s.SetParent(solo2.ID, "DDC/CV"); err == nil {
+		t.Error("want error assigning under a sub-project, got nil")
+	}
+
+	// Reject moving a project that has its own children.
+	if err := s.SetParent(ddc.ID, ""); err == nil {
+		t.Error("want error re-parenting a project with sub-projects, got nil")
+	}
+
+	// Reject a name collision under the target parent.
+	s.CreateProject("Other", "")
+	s.CreateProject("Other/CV", "")
+	otherCV, _ := s.ProjectByName("Other/CV")
+	if err := s.SetParent(otherCV.ID, "DDC"); err == nil {
+		t.Error("want error on name collision under target parent, got nil")
+	}
+}
+
+func TestSetParentRollsUpEntries(t *testing.T) {
+	s := testStore(t)
+	s.CreateProject("DDC", "")
+	appleby, _ := s.CreateProject("Appleby", "")
+	if _, err := s.AddEntry(NewEntry{Project: "Appleby", Subject: "w", Date: "2026-07-01", Start: "09:00", Minutes: 60, Kind: KindLogged}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetParent(appleby.ID, "DDC"); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := s.Entries(Filter{Project: "DDC"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].ProjectPath() != "DDC/Appleby" {
+		t.Errorf("Appleby's entries should roll up under DDC after re-parenting: %+v", entries)
+	}
+}
+
 func TestArchiveParentCascades(t *testing.T) {
 	s := testStore(t)
 	p, _ := s.CreateProject("DDC", "")

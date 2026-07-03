@@ -168,21 +168,23 @@ func TestByProjectRollup(t *testing.T) {
 		t.Fatal(err)
 	}
 	type row struct {
-		key string
-		sub bool
-		log float64
-		pln float64
+		key    string
+		sub    bool
+		rollup bool
+		group  string
+		log    float64
+		pln    float64
 	}
 	var got []row
 	for _, l := range r.Lines {
-		got = append(got, row{l.Key, l.Sub, l.LoggedHours, l.PlannedHours})
+		got = append(got, row{l.Key, l.Sub, l.Rollup, l.Group, l.LoggedHours, l.PlannedHours})
 	}
 	want := []row{
-		{"DDC", false, 3.0, 1.5},
-		{"(direct)", true, 1.0, 0},
-		{"Appleby", true, 0, 1.5},
-		{"CV", true, 2.0, 0},
-		{"Personal", false, 0.5, 0},
+		{"DDC", false, true, "DDC", 3.0, 1.5},
+		{"(direct)", true, false, "DDC", 1.0, 0},
+		{"Appleby", true, false, "DDC", 0, 1.5},
+		{"CV", true, false, "DDC", 2.0, 0},
+		{"Personal", false, false, "", 0.5, 0},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("lines = %+v\nwant    %+v", got, want)

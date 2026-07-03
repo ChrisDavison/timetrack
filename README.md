@@ -10,12 +10,15 @@ over-committed.
 
 Projects can have one level of sub-projects, referenced everywhere as
 `Parent/Child` (e.g. `DDC/Computer Vision`). Time can be logged against
-either level. Filtering by a parent includes its sub-projects; project
-reports show each parent's rolled-up total with an indented breakdown
-(including a `(direct)` line for the parent's own time). **CSV exports stay
-flat** — one full-path row per (sub-)project, no rollup rows — so summing a
-column never double-counts. Sub-projects inherit their parent's color unless
-given their own, and archiving a parent archives its children.
+either level. Filtering by a parent includes its sub-projects; the web
+project report shows each parent's rolled-up percentage of total logged
+hours, with its sub-project breakdown (including a `(direct)` line for the
+parent's own time) folded away behind a disclosure toggle. **CSV exports
+stay flat** — one full-path row per (sub-)project, no rollup rows — so
+summing a column never double-counts. Sub-projects inherit their parent's
+color unless given their own, and archiving a parent archives its children.
+A project can be deleted once it has no entries or sub-projects, and can be
+re-parented (assigned to, or unassigned from, a parent) at any time.
 
 ## Build
 
@@ -37,13 +40,16 @@ tt serve -addr :9000 -capacity 7.5
 - **Calendar** — week grid (click an empty slot to add an entry there) and a
   month overview shaded by hours per day. Planned entries render hatched.
 - **Report** — hours by project, tag, or day for any range; CSV download.
-- **Projects** — add, recolor, archive.
+- **Projects** — add, recolor, archive, delete, and assign/unassign a parent.
 
 ## CLI
 
 ```sh
 tt projects add EngD '#2a78d6'
 tt projects add 'EngD/Thesis'       # sub-project
+tt projects reparent Thesis EngD    # move a top-level project under a parent
+tt projects reparent Thesis         # ...or back to top level
+tt projects delete Thesis           # only if it has no entries or sub-projects
 tt add -p EngD -s "thesis chapter 3" -d 1.5h -at 09:30 -t '#research #writing'
 tt add -p 'EngD/Thesis' -s "figures" -d 1h
 tt add -p EngD -s "supervisor meeting" -d 1h -date tomorrow -plan

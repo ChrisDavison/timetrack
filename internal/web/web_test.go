@@ -254,10 +254,87 @@ func TestCreateSubProjectViaForm(t *testing.T) {
 	}
 }
 
+func TestReportShowsPercentAndFoldedSubProjects(t *testing.T) {
+	s, h := testServer(t)
+	makeSub(t, s, "EngD/Thesis")
+	addEntry(t, s, "EngD", "root work", "2026-07-01", 60, store.KindLogged, "")
+	addEntry(t, s, "EngD/Thesis", "chapter 3", "2026-07-01", 60, store.KindLogged, "")
+	addEntry(t, s, "Personal", "tax return", "2026-07-01", 120, store.KindLogged, "")
+
+	body := get(t, h, "/report?by=project&from=2026-07-01&to=2026-07-01").Body.String()
+	if !strings.Contains(body, `class="disclosure"`) {
+		t.Errorf("report should render a disclosure toggle for the EngD rollup: %s", body)
+	}
+	if !strings.Contains(body, `class="subrow" data-group="EngD" hidden`) {
+		t.Errorf("sub-project rows should be collapsed by default: %s", body)
+	}
+	// EngD (2h of 4h total) should show a 50% share.
+	if !strings.Contains(body, "50.0%") {
+		t.Errorf("report should show EngD's percentage of total logged hours: %s", body)
+	}
+}
+
 func TestProjectsPageHasParentSelect(t *testing.T) {
 	_, h := testServer(t)
 	body := get(t, h, "/projects").Body.String()
 	if !strings.Contains(body, `name="parent"`) {
 		t.Errorf("projects page add form should have a parent select")
+	}
+}
+
+func TestDeleteEmptyProjectViaForm(t *testing.T) {
+	s, h := testServer(t)
+	rec := postForm(t, h, "/projects/2/delete", nil) // Personal, no entries
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("delete empty project = %d: %s", rec.Code, rec.Body.String())
+	}
+	if _, err := s.ProjectByName("Personal"); err == nil {
+		t.Error("project should be deleted")
+	}
+}
+
+func TestDeleteProjectWithEntriesFails(t *testing.T) {
+	s, h := testServer(t)
+	addEntry(t, s, "EngD", "work", "2026-07-01", 60, store.KindLogged, "")
+	rec := postForm(t, h, "/projects/1/delete", nil) // EngD, has an entry
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("delete non-empty project = %d, want error page", rec.Code)
+	}
+	if _, err := s.ProjectByName("EngD"); err != nil {
+		t.Error("project with entries should not be deleted")
+	}
+}
+
+func TestReparentProjectViaForm(t *testing.T) {
+	s, h := testServer(t)
+	rec := postForm(t, h, "/projects/2/parent", url.Values{"parent": {"EngD"}}) // Personal -> EngD
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("reparent = %d: %s", rec.Code, rec.Body.String())
+	}
+	if _, err := s.ProjectByName("EngD/Personal"); err != nil {
+		t.Fatalf("Personal should now resolve under EngD: %v", err)
+	}
+
+	body := get(t, h, "/projects").Body.String()
+	if !strings.Contains(body, `<option selected>EngD</option>`) {
+		t.Errorf("projects page should show Personal's parent select on EngD: %s", body)
+	}
+
+	// Unassign back to top level.
+	rec = postForm(t, h, "/projects/2/parent", url.Values{"parent": {""}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("unassign = %d: %s", rec.Code, rec.Body.String())
+	}
+	if _, err := s.ProjectByName("Personal"); err != nil {
+		t.Errorf("Personal should resolve top-level again: %v", err)
+	}
+}
+
+func TestProjectsPageHidesParentSelectForProjectWithChildren(t *testing.T) {
+	s, h := testServer(t)
+	makeSub(t, s, "EngD/Thesis")
+	body := get(t, h, "/projects").Body.String()
+	if !strings.Contains(body, "has sub-projects") {
+		t.Errorf("projects page should hide the parent select for EngD, which has a sub-project: %s", body)
 	}
 }

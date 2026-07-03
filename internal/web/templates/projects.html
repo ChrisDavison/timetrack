@@ -3,9 +3,10 @@
 
 {{if .Projects}}
 <table>
-  <thead><tr><th>Project</th><th>Color</th><th></th></tr></thead>
+  <thead><tr><th>Project</th><th>Parent</th><th>Color</th><th></th></tr></thead>
   <tbody>
   {{range .Projects}}
+  {{$p := .}}
   <tr>
     <td>
       {{if .ParentName}}<span style="color: var(--muted); padding: 0 0.3rem 0 1rem;">⤷</span>{{end}}
@@ -14,6 +15,18 @@
         <button class="quiet">rename</button>
       </form>
       {{if .Archived}}<span class="tag">archived</span>{{end}}
+    </td>
+    <td>
+      {{if index $.HasChildren .ID}}
+      <span style="color: var(--muted); font-size: 0.85rem;">has sub-projects</span>
+      {{else}}
+      <form class="inline" method="post" action="/projects/{{.ID}}/parent">
+        <select name="parent" onchange="this.form.submit()" title="assign or unassign a parent project">
+          <option value="">— top level —</option>
+          {{range $.Projects}}{{if and (not .ParentName) (ne .ID $p.ID)}}<option {{if eq .Name $p.ParentName}}selected{{end}}>{{.Name}}</option>{{end}}{{end}}
+        </select>
+      </form>
+      {{end}}
     </td>
     <td>
       <form class="inline" method="post" action="/projects/{{.ID}}">
@@ -28,6 +41,10 @@
         {{else}}
         <input type="hidden" name="archived" value="1"><button class="quiet">archive</button>
         {{end}}
+      </form>
+      <form class="inline" method="post" action="/projects/{{.ID}}/delete"
+            onsubmit="return confirm('Delete project {{.Name}}? This cannot be undone.');">
+        <button class="quiet">delete</button>
       </form>
     </td>
   </tr>

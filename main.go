@@ -380,7 +380,41 @@ func runProjects(args []string) error {
 		}
 		fmt.Printf("archived project %s\n", p.Name)
 		return nil
+	case "delete":
+		if len(rest) < 2 {
+			return fmt.Errorf("usage: tt projects delete <name>")
+		}
+		p, err := s.ProjectByName(rest[1])
+		if err != nil {
+			return err
+		}
+		if err := s.DeleteProject(p.ID); err != nil {
+			return err
+		}
+		fmt.Printf("deleted project %s\n", p.Path())
+		return nil
+	case "reparent":
+		if len(rest) < 2 {
+			return fmt.Errorf("usage: tt projects reparent <name> [parent]  (omit parent to move to top level)")
+		}
+		p, err := s.ProjectByName(rest[1])
+		if err != nil {
+			return err
+		}
+		parent := ""
+		if len(rest) > 2 && rest[2] != "-" {
+			parent = rest[2]
+		}
+		if err := s.SetParent(p.ID, parent); err != nil {
+			return err
+		}
+		moved, err := s.ProjectByID(p.ID)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("moved project to %s\n", moved.Path())
+		return nil
 	default:
-		return fmt.Errorf("unknown subcommand %q (want list, add, or archive)", sub)
+		return fmt.Errorf("unknown subcommand %q (want list, add, archive, delete, or reparent)", sub)
 	}
 }

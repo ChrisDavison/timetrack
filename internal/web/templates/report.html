@@ -32,23 +32,41 @@
   <button class="primary">Run</button>
 </form>
 
-<table>
-  <thead><tr><th>{{.By}}</th><th class="num">Logged</th><th class="num">Planned</th></tr></thead>
+<table id="report-table">
+  <thead><tr><th>{{.By}}</th><th class="num">%</th><th class="num">Logged</th><th class="num">Planned</th></tr></thead>
   <tbody>
   {{range .Report.Lines}}
-  <tr>
-    <td>{{if .Sub}}<span style="padding-left: 1.5rem; color: var(--ink-2);">{{.Key}}</span>{{else}}{{.Key}}{{end}}</td>
+  <tr {{if .Sub}}class="subrow" data-group="{{.Group}}" hidden{{end}}>
+    <td>
+      {{if .Rollup}}<button type="button" class="disclosure" aria-expanded="false" data-group="{{.Group}}">&#9656;</button>{{end}}
+      {{if .Sub}}<span style="padding-left: 1.5rem; color: var(--ink-2);">{{.Key}}</span>{{else}}{{.Key}}{{end}}
+    </td>
+    <td class="num">{{pct .LoggedHours $.Report.TotalLogged}}%</td>
     <td class="num">{{hours .LoggedHours}}</td>
     <td class="num">{{if .PlannedHours}}{{hours .PlannedHours}}{{end}}</td>
   </tr>
   {{else}}
-  <tr><td colspan="3" class="empty">No entries in this range.</td></tr>
+  <tr><td colspan="4" class="empty">No entries in this range.</td></tr>
   {{end}}
   </tbody>
   <tfoot><tr>
     <td>total</td>
+    <td class="num">100%</td>
     <td class="num">{{hours .Report.TotalLogged}}</td>
     <td class="num">{{hours .Report.TotalPlanned}}</td>
   </tr></tfoot>
 </table>
+<script>
+document.getElementById('report-table').addEventListener('click', function (ev) {
+  var btn = ev.target.closest('.disclosure');
+  if (!btn) return;
+  var group = btn.dataset.group;
+  var expanded = btn.getAttribute('aria-expanded') === 'true';
+  document.querySelectorAll('tr.subrow[data-group="' + CSS.escape(group) + '"]').forEach(function (row) {
+    row.hidden = expanded;
+  });
+  btn.setAttribute('aria-expanded', String(!expanded));
+  btn.innerHTML = expanded ? '&#9656;' : '&#9662;';
+});
+</script>
 {{template "footer"}}

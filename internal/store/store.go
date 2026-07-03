@@ -202,6 +202,15 @@ func (s *Store) ProjectByName(name string) (Project, error) {
 	return p, err
 }
 
+// ProjectByID resolves a project by its numeric ID.
+func (s *Store) ProjectByID(id int64) (Project, error) {
+	p, err := scanProject(s.db.QueryRow(projectSelect+` WHERE p.id = ?`, id))
+	if err == sql.ErrNoRows {
+		return Project{}, fmt.Errorf("no project with id %d", id)
+	}
+	return p, err
+}
+
 // Projects lists projects in tree order: each top-level project followed by
 // its sub-projects.
 func (s *Store) Projects(includeArchived bool) ([]Project, error) {
@@ -239,6 +248,71 @@ func (s *Store) UpdateProject(p Project) error {
 	}
 	if p.Archived {
 		_, err = s.db.Exec(`UPDATE projects SET archived = 1 WHERE parent_id = ?`, p.ID)
+	}
+	return err
+}
+
+// DeleteProject removes a project. It refuses when the project still has
+// time entries or sub-projects; archive such projects instead.
+func (s *Store) DeleteProject(id int64) error {
+	var entryCount int
+	if err := s.db.QueryRow(`SELECT count(*) FROM entries WHERE project_id = ?`, id).Scan(&entryCount); err != nil {
+		return err
+	}
+	if entryCount > 0 {
+		return fmt.Errorf("project has %d entries; reassign or delete them first", entryCount)
+	}
+	var childCount int
+	if err := s.db.QueryRow(`SELECT count(*) FROM projects WHERE parent_id = ?`, id).Scan(&childCount); err != nil {
+		return err
+	}
+	if childCount > 0 {
+		return fmt.Errorf("project has sub-projects; delete or move them first")
+	}
+	_, err := s.db.Exec(`DELETE FROM projects WHERE id = ?`, id)
+	return err
+}
+
+// SetParent re-parents a project. An empty parentPath makes it top-level; a
+// non-empty name makes it a sub-project of that (top-level) project.
+func (s *Store) SetParent(id int64, parentPath string) error {
+	p, err := s.ProjectByID(id)
+	if err != nil {
+		return err
+	}
+	var childCount int
+	if err := s.db.QueryRow(`SELECT count(*) FROM projects WHERE parent_id = ?`, id).Scan(&childCount); err != nil {
+		return err
+	}
+	if childCount > 0 {
+		return fmt.Errorf("%q has sub-projects and cannot itself become a sub-project", p.Path())
+	}
+
+	parentPath = strings.TrimSpace(parentPath)
+	if parentPath == "" {
+		if p.ParentID == 0 {
+			return nil // already top-level
+		}
+		_, err := s.db.Exec(`UPDATE projects SET parent_id = NULL WHERE id = ?`, id)
+		if err != nil && strings.Contains(err.Error(), "ux_projects_parent_name") {
+			return fmt.Errorf("a top-level project named %q already exists", p.Name)
+		}
+		return err
+	}
+
+	parent, err := s.ProjectByName(parentPath)
+	if err != nil {
+		return err
+	}
+	if parent.ID == id {
+		return fmt.Errorf("a project cannot be its own parent")
+	}
+	if parent.ParentID != 0 {
+		return fmt.Errorf("%q is a sub-project and cannot have children", parentPath)
+	}
+	_, err = s.db.Exec(`UPDATE projects SET parent_id = ? WHERE id = ?`, parent.ID, id)
+	if err != nil && strings.Contains(err.Error(), "ux_projects_parent_name") {
+		return fmt.Errorf("a project named %q already exists under %q", p.Name, parent.Name)
 	}
 	return err
 }

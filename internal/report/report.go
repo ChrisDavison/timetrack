@@ -27,6 +27,8 @@ type Line struct {
 	Key          string // display label; sub-project lines show the bare child name
 	Path         string // full project path for CSV; "" on rollup display lines
 	Sub          bool   // indented breakdown line under the preceding rollup line
+	Group        string // top-level project name; set on a rollup header and its sub lines
+	Rollup       bool   // this is a parent line with sub lines (the foldable header)
 	LoggedHours  float64
 	PlannedHours float64
 }
@@ -156,8 +158,11 @@ func projectLines(entries []store.Entry) []Line {
 			lines = append(lines, topLine)
 			continue
 		}
+		topLine.Rollup = true
+		topLine.Group = top
 		lines = append(lines, topLine) // rollup display line, Path ""
 		if d := directs[top]; d != nil {
+			d.Group = top
 			lines = append(lines, *d)
 		}
 		childKeys := make([]string, 0, len(children))
@@ -166,7 +171,9 @@ func projectLines(entries []store.Entry) []Line {
 		}
 		sort.Strings(childKeys)
 		for _, k := range childKeys {
-			lines = append(lines, *children[k])
+			child := *children[k]
+			child.Group = top
+			lines = append(lines, child)
 		}
 	}
 	return lines

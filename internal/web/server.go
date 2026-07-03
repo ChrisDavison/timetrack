@@ -56,6 +56,8 @@ func NewServer(s *store.Store, capacityDay float64) http.Handler {
 	mux.HandleFunc("GET /projects", srv.projects)
 	mux.HandleFunc("POST /projects", srv.projectCreate)
 	mux.HandleFunc("POST /projects/{id}", srv.projectUpdate)
+	mux.HandleFunc("POST /projects/{id}/delete", srv.projectDelete)
+	mux.HandleFunc("POST /projects/{id}/parent", srv.projectReparent)
 	mux.HandleFunc("POST /timer/start", srv.timerStart)
 	mux.HandleFunc("POST /timer/stop", srv.timerStop)
 	mux.HandleFunc("GET /report", srv.report)
@@ -421,8 +423,16 @@ func (s *server) projects(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	// A project with sub-projects can't itself be re-parented (would create
+	// a third tier), so the template hides its parent control.
+	hasChildren := map[int64]bool{}
+	for _, p := range ps {
+		if p.ParentID != 0 {
+			hasChildren[p.ParentID] = true
+		}
+	}
 	s.render(w, http.StatusOK, "projects.html", map[string]any{
-		"Title": "Projects", "Active": "projects", "Projects": ps,
+		"Title": "Projects", "Active": "projects", "Projects": ps, "HasChildren": hasChildren,
 	})
 }
 
@@ -470,6 +480,32 @@ func (s *server) projectUpdate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		break
+	}
+	http.Redirect(w, r, "/projects", http.StatusSeeOther)
+}
+
+func (s *server) projectDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.store.DeleteProject(id); err != nil {
+		s.fail(w, err)
+		return
+	}
+	http.Redirect(w, r, "/projects", http.StatusSeeOther)
+}
+
+func (s *server) projectReparent(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.store.SetParent(id, r.FormValue("parent")); err != nil {
+		s.fail(w, err)
+		return
 	}
 	http.Redirect(w, r, "/projects", http.StatusSeeOther)
 }
