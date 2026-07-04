@@ -197,3 +197,16 @@ button.danger { color: var(--over); }
 .pager { display: flex; gap: 0.4rem; align-items: center; }
 
 .empty { color: var(--muted); padding: 1.5rem 0; text-align: center; }
+
+/* --- notes dialog --- */
+.notes-btn { padding: 0 0.2rem; font-size: 0.95rem; line-height: 1; vertical-align: middle; }
+.notes-dialog {
+  max-width: 480px; width: calc(100% - 2rem);
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 1rem 1.1rem;
+}
+.notes-dialog::backdrop { background: rgba(0, 0, 0, 0.35); }
+.notes-dialog-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.notes-dialog-head strong { font-size: 1rem; }
+.notes-dialog-body { margin-top: 0.7rem; color: var(--ink-2); white-space: pre-wrap; }
