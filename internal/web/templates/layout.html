@@ -6,6 +6,7 @@
 <title>{{.Title}} · timetrack</title>
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/htmx.min.js" defer></script>
+<script src="/static/notes-modal.js" defer></script>
 </head>
 <body>
 <nav>
@@ -23,6 +24,15 @@
 
 {{define "footer"}}
 </main>
+<dialog id="notes-dialog" class="notes-dialog">
+  <form method="dialog">
+    <div class="notes-dialog-head">
+      <strong class="notes-dialog-subject"></strong>
+      <button class="quiet" aria-label="Close">✕</button>
+    </div>
+  </form>
+  <div class="notes-dialog-body"></div>
+</dialog>
 </body>
 </html>
 {{end}}

@@ -51,7 +51,7 @@
     <td>{{.Start}}</td>
     <td class="num">{{hours .Hours}}</td>
     <td><span class="dot" style="background: {{if .ProjectColor}}{{.ProjectColor}}{{else}}var(--baseline){{end}}"></span>{{.ProjectPath}}</td>
-    <td>{{.Subject}}{{if .Notes}} <span title="{{.Notes}}">🗒</span>{{end}}{{if .ActivityID}} <a href="/activities/{{.ActivityID}}" class="tag" title="part of a multi-day activity">group</a>{{end}}</td>
+    <td>{{.Subject}}{{if .Notes}} <button type="button" class="quiet notes-btn" data-subject="{{.Subject}}" data-notes="{{.Notes}}" title="View notes">🗒</button>{{end}}{{if .ActivityID}} <a href="/activities/{{.ActivityID}}" class="tag" title="part of a multi-day activity">group</a>{{end}}</td>
     <td>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</td>
     <td>{{if eq (printf "%s" .Kind) "planned"}}<span class="kind-planned">planned</span>{{else}}logged{{end}}</td>
     <td style="white-space: nowrap;">
