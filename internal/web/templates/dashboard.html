@@ -59,10 +59,13 @@
 <h2>This week by project</h2>
 <div class="card">
   {{if .Bars}}
-  <div class="bars">
+  <div class="bars" id="week-bars">
     {{range .Bars}}
-    <div class="bar-row">
-      <span class="name"><span class="dot" style="background: {{.Color}}"></span>{{.Name}}</span>
+    <div class="bar-row{{if .Sub}} subrow{{end}}"{{if .Sub}} data-group="{{.Group}}" hidden{{end}}>
+      <span class="name">
+        {{if .Rollup}}<button type="button" class="disclosure" aria-expanded="false" data-group="{{.Group}}">&#9656;</button>{{end}}
+        <span class="dot" style="background: {{.Color}}"></span>{{.Name}}
+      </span>
       <div class="bar-track">
         <div class="bar-seg" style="width: {{printf "%.1f" .LoggedPct}}%; background: {{.Color}}"></div>
         <div class="bar-seg planned-seg" style="width: {{printf "%.1f" .PlannedPct}}%; background: {{.Color}}"></div>
@@ -71,6 +74,19 @@
     </div>
     {{end}}
   </div>
+  <script>
+  document.getElementById('week-bars').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('.disclosure');
+    if (!btn) return;
+    var group = btn.dataset.group;
+    var expanded = btn.getAttribute('aria-expanded') === 'true';
+    document.querySelectorAll('#week-bars .subrow[data-group="' + CSS.escape(group) + '"]').forEach(function (row) {
+      row.hidden = expanded;
+    });
+    btn.setAttribute('aria-expanded', String(!expanded));
+    btn.innerHTML = expanded ? '&#9656;' : '&#9662;';
+  });
+  </script>
   {{else}}<div class="empty">Nothing tracked this week yet.</div>{{end}}
 </div>
 

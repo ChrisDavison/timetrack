@@ -73,6 +73,24 @@ func TestDashboardRenders(t *testing.T) {
 	}
 }
 
+func TestDashboardShowsFoldedSubProjectBars(t *testing.T) {
+	s, h := testServer(t)
+	makeSub(t, s, "EngD/Thesis")
+	addEntry(t, s, "EngD", "root work", today(), 60, store.KindLogged, "")
+	addEntry(t, s, "EngD/Thesis", "chapter 3", today(), 60, store.KindLogged, "")
+
+	body := get(t, h, "/").Body.String()
+	if !strings.Contains(body, `class="disclosure"`) {
+		t.Errorf("dashboard should render a disclosure toggle for the EngD rollup bar: %s", body)
+	}
+	if !strings.Contains(body, `class="bar-row subrow" data-group="EngD" hidden`) {
+		t.Errorf("sub-project bars should be collapsed by default: %s", body)
+	}
+	if !strings.Contains(body, "(direct)") {
+		t.Errorf("dashboard should break out the parent's own time as (direct): %s", body)
+	}
+}
+
 func TestEntriesListFilters(t *testing.T) {
 	s, h := testServer(t)
 	addEntry(t, s, "EngD", "thesis writing", "2026-07-01", 60, store.KindLogged, "#research")

@@ -149,6 +149,9 @@ type projectBar struct {
 	// Percentages of the widest bar, for CSS widths.
 	LoggedPct  float64
 	PlannedPct float64
+	Sub        bool   // indented breakdown bar under the preceding rollup bar
+	Group      string // top-level project name; set on a rollup bar and its sub bars
+	Rollup     bool   // this is a parent bar with sub bars (the foldable header)
 }
 
 func (s *server) dashboard(w http.ResponseWriter, r *http.Request) {
@@ -199,8 +202,9 @@ func (s *server) dashboard(w http.ResponseWriter, r *http.Request) {
 	capacityDay := max(s.capacityDay-holidayTodayLogged-holidayTodayPlanned, 0)
 	capacityWeek := max(s.capacityDay*5-holidayWeekLogged-holidayWeekPlanned, 0)
 
-	// Bars show top-level projects only; rollup lines already include
-	// sub-project hours.
+	// Bars mirror the report's project rollup: top-level bars include their
+	// sub-projects' hours, with the per-sub-project breakdown folded away
+	// behind a disclosure toggle. All widths share the top-level scale.
 	var bars []projectBar
 	maxHours := 0.1
 	for _, l := range weekRep.Lines {
@@ -216,14 +220,20 @@ func (s *server) dashboard(w http.ResponseWriter, r *http.Request) {
 		projectColors[p.Path()] = p.Color
 	}
 	for _, l := range weekRep.Lines {
+		color := projectColors[l.Key]
 		if l.Sub {
-			continue
+			// Sub lines key by full path; "(direct)" and colourless
+			// sub-projects fall back to the parent's colour.
+			if color = projectColors[l.Path]; color == "" {
+				color = projectColors[l.Group]
+			}
 		}
 		bars = append(bars, projectBar{
-			Name: l.Key, Color: projectColors[l.Key],
+			Name: l.Key, Color: color,
 			Logged: l.LoggedHours, Planned: l.PlannedHours,
 			LoggedPct:  100 * l.LoggedHours / maxHours,
 			PlannedPct: 100 * l.PlannedHours / maxHours,
+			Sub:        l.Sub, Group: l.Group, Rollup: l.Rollup,
 		})
 	}
 

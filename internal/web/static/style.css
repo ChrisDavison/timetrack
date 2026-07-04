@@ -94,6 +94,10 @@ h2 { font-size: 1rem; margin: 1.5rem 0 0.5rem; color: var(--ink-2); }
   margin-left: 2px;
 }
 .bar-row .hours { font-size: 0.85rem; color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+.bar-row[hidden] { display: none; } /* display: grid above beats the UA [hidden] rule */
+.bar-row.subrow { margin-left: 1.25rem; grid-template-columns: calc(140px - 1.25rem) 1fr 110px; }
+.bar-row.subrow .name { color: var(--ink-2); }
+.bar-row.subrow .bar-seg { opacity: 0.75; }
 
 /* --- tables --- */
 table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
