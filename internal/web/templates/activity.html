@@ -1,0 +1,82 @@
+{{template "header" .}}
+{{$a := .Activity}}
+<div class="page-head">
+  <h1>{{$a.Subject}}</h1>
+</div>
+{{if .Error}}<div class="error-box">{{.Error}}</div>{{end}}
+
+<div class="card">
+  <p><span class="dot" style="background: var(--baseline)"></span>{{$a.Project}}
+    &nbsp;·&nbsp; {{$a.From}} – {{$a.To}} &nbsp;·&nbsp; {{hours $a.Hours}} across {{len $a.Members}} days</p>
+  <div class="row">
+    {{$anyPlanned := false}}
+    {{range $a.Members}}{{if eq (printf "%s" .Kind) "planned"}}{{$anyPlanned = true}}{{end}}{{end}}
+    {{if $anyPlanned}}
+    <form class="inline" method="post" action="/activities/{{$a.ID}}/confirm"><button class="quiet" title="mark every planned day as done">✓ confirm all</button></form>
+    {{end}}
+    <form class="inline" method="post" action="/activities/{{$a.ID}}/delete"
+          onsubmit="return confirm('Delete all {{len $a.Members}} days of this activity? This cannot be undone.');">
+      <button class="quiet danger">delete all</button>
+    </form>
+  </div>
+</div>
+
+<h2>Edit all days</h2>
+<form class="entry-form card" method="post" action="/activities/{{$a.ID}}">
+  <div class="row">
+    <label class="field">project
+      <select name="project" required>
+        {{range .Projects}}<option value="{{.Path}}" {{if eq .Path $a.Project}}selected{{end}}>{{if .ParentName}}&nbsp;&nbsp;&nbsp;{{end}}{{.Name}}</option>{{end}}
+      </select>
+    </label>
+    <label class="field">kind
+      <select name="kind">
+        <option value="logged" {{if eq $a.Kind "logged"}}selected{{end}}>logged (work done)</option>
+        <option value="planned" {{if eq $a.Kind "planned"}}selected{{end}}>planned (future allocation)</option>
+      </select>
+    </label>
+  </div>
+  <label class="field">subject
+    <input name="subject" value="{{$a.Subject}}" required>
+  </label>
+  <label class="field">duration (per day)
+    <input name="duration" value="{{$a.Duration}}" list="durations" required placeholder="1.5h">
+    <datalist id="durations">
+      <option value="30m"><option value="1h"><option value="1.5h"><option value="2h">
+      <option value="3h"><option value="4h"><option value="6h"><option value="8h">
+    </datalist>
+  </label>
+  <label class="field">tags
+    <input name="tags" value="{{$a.Tags}}" placeholder="#research #implementation">
+  </label>
+  <label class="field">notes
+    <textarea name="notes" rows="4" placeholder="optional">{{$a.Notes}}</textarea>
+  </label>
+  <div class="row">
+    <button class="primary">Save to all days</button>
+    <a href="/entries" style="align-self: center;">cancel</a>
+  </div>
+</form>
+
+<h2>Days</h2>
+<table>
+  <thead><tr><th>Date</th><th>Start</th><th class="num">Hours</th><th>Kind</th><th></th></tr></thead>
+  <tbody>
+  {{range $a.Members}}
+  <tr>
+    <td>{{.Date}}</td>
+    <td>{{.Start}}</td>
+    <td class="num">{{hours .Hours}}</td>
+    <td>{{if eq (printf "%s" .Kind) "planned"}}<span class="kind-planned">planned</span>{{else}}logged{{end}}</td>
+    <td style="white-space: nowrap;">
+      <a href="/entries/{{.ID}}/edit">edit</a>
+      {{if eq (printf "%s" .Kind) "planned"}}
+      <form class="inline" method="post" action="/entries/{{.ID}}/confirm"><input type="hidden" name="back" value="/activities/{{$a.ID}}"><button class="quiet" title="mark as done">✓ done</button></form>
+      {{end}}
+      <form class="inline" method="post" action="/entries/{{.ID}}/delete"><input type="hidden" name="back" value="/activities/{{$a.ID}}"><button class="quiet danger">delete</button></form>
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+{{template "footer"}}

@@ -38,8 +38,8 @@ func TestCreateAndListProjects(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Projects: %v", err)
 	}
-	if len(ps) != 2 {
-		t.Fatalf("want 2 projects, got %d", len(ps))
+	if len(ps) != 3 { // EngD, Personal, and the always-present Holiday project
+		t.Fatalf("want 3 projects, got %d", len(ps))
 	}
 }
 
@@ -82,12 +82,12 @@ func TestArchiveProjectHiddenFromDefaultList(t *testing.T) {
 	}
 
 	active, _ := s.Projects(false)
-	if len(active) != 0 {
+	if len(active) != 1 { // just the always-present Holiday project
 		t.Errorf("archived project should be hidden, got %d", len(active))
 	}
 	all, _ := s.Projects(true)
-	if len(all) != 1 {
-		t.Errorf("want 1 project including archived, got %d", len(all))
+	if len(all) != 2 {
+		t.Errorf("want 2 projects including archived, got %d", len(all))
 	}
 }
 
@@ -166,7 +166,7 @@ func TestProjectsTreeOrder(t *testing.T) {
 	for _, p := range ps {
 		paths = append(paths, p.Path())
 	}
-	want := []string{"DDC", "DDC/Appleby", "DDC/CV", "Personal"}
+	want := []string{"DDC", "DDC/Appleby", "DDC/CV", "Holiday", "Personal"}
 	if !reflect.DeepEqual(paths, want) {
 		t.Errorf("tree order = %v, want %v", paths, want)
 	}
@@ -237,6 +237,26 @@ func TestDeleteProject(t *testing.T) {
 	s.CreateProject("Parent/Child", "")
 	if err := s.DeleteProject(parent.ID); err == nil {
 		t.Error("want error deleting project with sub-projects, got nil")
+	}
+}
+
+func TestHolidayIsSystemProjectAndCannotBeDeletedOrArchived(t *testing.T) {
+	s := testStore(t)
+	holiday, err := s.ProjectByName("Holiday")
+	if err != nil {
+		t.Fatalf("Holiday project should always exist: %v", err)
+	}
+	if !holiday.System {
+		t.Errorf("Holiday should be a system project: %+v", holiday)
+	}
+
+	if err := s.DeleteProject(holiday.ID); err == nil {
+		t.Error("want error deleting the Holiday system project, got nil")
+	}
+
+	holiday.Archived = true
+	if err := s.UpdateProject(holiday); err == nil {
+		t.Error("want error archiving the Holiday system project, got nil")
 	}
 }
 
@@ -314,7 +334,7 @@ func TestArchiveParentCascades(t *testing.T) {
 	if err := s.UpdateProject(p); err != nil {
 		t.Fatal(err)
 	}
-	if active, _ := s.Projects(false); len(active) != 0 {
+	if active, _ := s.Projects(false); len(active) != 1 { // just the always-present Holiday project
 		t.Errorf("children should be archived with parent, got %v", active)
 	}
 }

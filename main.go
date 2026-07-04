@@ -113,13 +113,16 @@ func runAdd(args []string) error {
 	subject := fs.String("s", "", "subject of work (required)")
 	notes := fs.String("n", "", "notes")
 	date := fs.String("date", "", "date: YYYY-MM-DD, today (default), yesterday, tomorrow")
+	to := fs.String("to", "", "end date for a multi-day activity: YYYY-MM-DD, today, yesterday, tomorrow")
+	weekdays := fs.Bool("weekdays", false, "with -to, skip Saturdays and Sundays")
 	at := fs.String("at", "09:00", "start time HH:MM (snapped to half hour)")
 	dur := fs.String("d", "", "duration, e.g. 1.5h or 90m (required)")
 	tags := fs.String("t", "", "tags, e.g. 'research,writing' or '#research #writing'")
 	plan := fs.Bool("plan", false, "record as planned (future) time instead of logged work")
 	fs.Parse(args)
 
-	day, err := parseDate(*date, time.Now())
+	now := time.Now()
+	day, err := parseDate(*date, now)
 	if err != nil {
 		return err
 	}
@@ -136,14 +139,31 @@ func runAdd(args []string) error {
 		return err
 	}
 	defer s.Close()
-	e, err := s.AddEntry(store.NewEntry{
+	newEntry := store.NewEntry{
 		Project: *project, Subject: *subject, Notes: *notes,
 		Date: day, Start: *at, Minutes: minutes, Kind: kind, Tags: *tags,
-	})
+	}
+	if *to == "" {
+		e, err := s.AddEntry(newEntry)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("added #%d: %s\n", e.ID, formatEntry(e))
+		return nil
+	}
+	toDay, err := parseDate(*to, now)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("added #%d: %s\n", e.ID, formatEntry(e))
+	entries, err := s.AddActivity(newEntry, toDay, *weekdays)
+	if err != nil {
+		return err
+	}
+	if len(entries) == 1 {
+		fmt.Printf("added #%d: %s\n", entries[0].ID, formatEntry(entries[0]))
+		return nil
+	}
+	fmt.Printf("added activity: %d entries from %s to %s\n", len(entries), day, toDay)
 	return nil
 }
 

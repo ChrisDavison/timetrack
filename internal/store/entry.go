@@ -33,6 +33,7 @@ type Entry struct {
 	Kind          Kind
 	StartedAt     time.Time // set while running
 	Tags          []string
+	ActivityID    int64 // 0 when not part of a multi-day activity group
 }
 
 // Hours returns the entry duration in hours.
@@ -107,11 +108,20 @@ func blocksFromMinutes(minutes int) int {
 }
 
 func (n NewEntry) validate() error {
-	if strings.TrimSpace(n.Subject) == "" {
-		return fmt.Errorf("subject is required")
+	if err := n.validateShared(); err != nil {
+		return err
 	}
 	if _, err := time.Parse("2006-01-02", n.Date); err != nil {
 		return fmt.Errorf("invalid date %q (want YYYY-MM-DD)", n.Date)
+	}
+	return nil
+}
+
+// validateShared checks the fields an activity group shares across all its
+// member entries (everything except date/start, which stay per-day).
+func (n NewEntry) validateShared() error {
+	if strings.TrimSpace(n.Subject) == "" {
+		return fmt.Errorf("subject is required")
 	}
 	if n.Minutes <= 0 {
 		return fmt.Errorf("duration must be positive")
@@ -142,7 +152,7 @@ func (s *Store) AddEntry(n NewEntry) (Entry, error) {
 		return Entry{}, err
 	}
 	id, _ := res.LastInsertId()
-	if err := s.setTags(id, ParseTags(n.Tags)); err != nil {
+	if err := s.setTags(s.db, id, ParseTags(n.Tags)); err != nil {
 		return Entry{}, err
 	}
 	return s.Entry(id)
@@ -167,7 +177,7 @@ func (s *Store) UpdateEntry(id int64, n NewEntry) (Entry, error) {
 	if err != nil {
 		return Entry{}, err
 	}
-	if err := s.setTags(id, ParseTags(n.Tags)); err != nil {
+	if err := s.setTags(s.db, id, ParseTags(n.Tags)); err != nil {
 		return Entry{}, err
 	}
 	return s.Entry(id)
@@ -178,15 +188,24 @@ func (s *Store) DeleteEntry(id int64) error {
 	return err
 }
 
-func (s *Store) setTags(entryID int64, tags []string) error {
-	if _, err := s.db.Exec(`DELETE FROM entry_tags WHERE entry_id = ?`, entryID); err != nil {
+// execer is satisfied by both *sql.DB and *sql.Tx, so tag writes can join
+// whichever transaction (if any) the caller is already using. Mixing the two
+// on the single-connection pool would otherwise deadlock: a Tx holds the
+// pool's only connection, so a plain s.db.Exec issued before it commits
+// blocks forever waiting for a connection that will never free up.
+type execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+func (s *Store) setTags(db execer, entryID int64, tags []string) error {
+	if _, err := db.Exec(`DELETE FROM entry_tags WHERE entry_id = ?`, entryID); err != nil {
 		return err
 	}
 	for _, tag := range tags {
-		if _, err := s.db.Exec(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, tag); err != nil {
+		if _, err := db.Exec(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, tag); err != nil {
 			return err
 		}
-		if _, err := s.db.Exec(
+		if _, err := db.Exec(
 			`INSERT INTO entry_tags (entry_id, tag_id) SELECT ?, id FROM tags WHERE name = ?`,
 			entryID, tag); err != nil {
 			return err
@@ -197,7 +216,8 @@ func (s *Store) setTags(entryID int64, tags []string) error {
 
 const entrySelect = `
 	SELECT e.id, e.project_id, p.name, COALESCE(pp.name, ''), p.color, e.subject, e.notes,
-	       e.date, e.start_time, COALESCE(e.duration_blocks, 0), e.kind, COALESCE(e.started_at, '')
+	       e.date, e.start_time, COALESCE(e.duration_blocks, 0), e.kind, COALESCE(e.started_at, ''),
+	       COALESCE(e.activity_id, 0)
 	FROM entries e
 	JOIN projects p ON p.id = e.project_id
 	LEFT JOIN projects pp ON pp.id = p.parent_id`
@@ -206,7 +226,7 @@ func scanEntry(row interface{ Scan(...any) error }) (Entry, error) {
 	var e Entry
 	var startedAt string
 	err := row.Scan(&e.ID, &e.ProjectID, &e.ProjectName, &e.ProjectParent, &e.ProjectColor, &e.Subject, &e.Notes,
-		&e.Date, &e.Start, &e.Blocks, &e.Kind, &startedAt)
+		&e.Date, &e.Start, &e.Blocks, &e.Kind, &startedAt, &e.ActivityID)
 	if err != nil {
 		return Entry{}, err
 	}
@@ -343,7 +363,7 @@ func (s *Store) StartTimer(project, subject, notes, tags string, now time.Time) 
 		return Entry{}, err
 	}
 	id, _ := res.LastInsertId()
-	if err := s.setTags(id, ParseTags(tags)); err != nil {
+	if err := s.setTags(s.db, id, ParseTags(tags)); err != nil {
 		return Entry{}, err
 	}
 	return s.Entry(id)
